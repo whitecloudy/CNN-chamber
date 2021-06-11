@@ -42,8 +42,9 @@ class dataParser:
         y_data = []
 
         for i in range(6):
-            y_data.append(label[i].real)
-            y_data.append(label[i].imag)
+            label_element = complex(label[i])
+            y_data.append(label_element.real)
+            y_data.append(label_element.imag)
 
         return torch.FloatTensor(np.array(y_data))
 
@@ -100,6 +101,9 @@ class DataProcessor:
 
 def main():
     d = DataProcessor(multiply=5)
+
+    # for x, y in d:
+        #print(y.shape)
 
     print(len(d))
 

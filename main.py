@@ -72,7 +72,7 @@ def test(model, device, test_loader):
     test_loss /= len(test_loader.dataset)
     test_loss = test_loss ** 0.5
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
@@ -136,8 +136,11 @@ def main():
     #dataset2 = datasets.MNIST('../data', train=False,
     #                   transform=transform)
     dataset_handler = DatasetHandler()
+
     training_dataset = dataset_handler.training_dataset
+    print("Training Dataset : ", len(training_dataset))
     test_dataset = dataset_handler.test_dataset
+    print("Test Dataset : ", len(test_dataset))
     
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)

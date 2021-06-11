@@ -39,6 +39,7 @@ class DatasetHandler:
                     print("Data ", key, " will be ignored.")
                     print("Error : {:.4f}".format(error), "\tLength : ", length)
                     print()
+        print(len(self.key_usable)+len(self.key_trainable))
 
         self.prepare_dataset()
 
@@ -47,9 +48,16 @@ class DatasetHandler:
         random.shuffle(self.key_trainable)
 
         training_key_length = int(len(self.key_trainable) * self.train_data_ratio)
+        
+        for key in self.key_trainable:
+            if key[0] == 'data/normal_210519.csv':
+                self.key_for_test.append(key)
+            else:
+                self.key_for_training.append(key)
 
-        self.key_for_training = self.key_trainable[0:training_key_length]
-        self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
+        self.key_for_test += self.key_usable
+        #self.key_for_training = self.key_trainable[0:training_key_length]
+        #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
 
         self.training_dataset = BeamDataset(self.multiply, self.key_for_training)
         self.test_dataset = BeamDataset(self.multiply, self.key_for_test)

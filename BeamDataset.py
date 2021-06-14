@@ -6,8 +6,8 @@ import random
 import time
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, key_list):
-        self.data_processor = DataProcessor(multiply, key_list)
+    def __init__(self, multiply, key_list, normalize=None):
+        self.data_processor = DataProcessor(multiply, key_list, normalize)
 
     def __len__(self):
         return len(self.data_processor)
@@ -60,7 +60,8 @@ class DatasetHandler:
         #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
 
         self.training_dataset = BeamDataset(self.multiply, self.key_for_training)
-        self.test_dataset = BeamDataset(self.multiply, self.key_for_test)
+        self.normalize = self.training_dataset.data_processor.normalize
+        self.test_dataset = BeamDataset(self.multiply, self.key_for_test, self.normalize)
 
 
     def printLength(self):

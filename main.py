@@ -7,6 +7,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
+import numpy as np
 
 
 class Net(nn.Module):
@@ -51,6 +52,25 @@ def train(args, model, device, train_loader, optimizer, epoch):
             if args.dry_run:
                 break
 
+def get_loss(output, target):
+    diff = output - target
+
+    sum_e = 0.0
+
+    for i, diff_data in enumerate(diff):
+        target_data = target[i]
+        output_data = output[i]
+
+        # TODO : This should be removed
+        # TODO : loss calculation must be improved
+        print(output_data[0], ", ", target_data[0])
+
+        sum_e += (diff_data ** 2).sum()/(target_data ** 2).sum()
+
+    sum_e /= len(diff)
+        
+    return sum_e
+
 
 def test(model, device, test_loader):
     model.eval()
@@ -61,16 +81,15 @@ def test(model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
-            t = output
-            #pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-            #print(target)
-            #print(len(pred))
-            #print(target.view_as(pred))
-            #correct += pred.eq(target.view_as(pred)).sum().item()
+            test_loss += get_loss(output, target)
+            # test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
+            # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            # print(target)
+            # print(len(pred))
+            # print(target.view_as(pred))
+            # correct += pred.eq(target.view_as(pred)).sum().item()
     
     test_loss /= len(test_loader.dataset)
-    test_loss = test_loss ** 0.5
 
     print('\nTest set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),

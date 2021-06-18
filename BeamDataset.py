@@ -58,8 +58,8 @@ class DatasetHandler:
         self.key_for_test += self.key_usable
         #self.key_for_training = self.key_trainable[0:training_key_length]
         #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
-
-        self.training_dataset = BeamDataset(self.multiply, self.key_for_training)
+        
+        self.training_dataset = BeamDataset(self.multiply, self.key_for_training)#, self.normalize)
         self.normalize = self.training_dataset.data_processor.normalize
         self.test_dataset = BeamDataset(self.multiply, self.key_for_test, self.normalize)
 

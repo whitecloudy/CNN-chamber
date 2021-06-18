@@ -17,13 +17,17 @@ class Net(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 4, 1) # input is 24 * 5 * 32
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(2688, 128) # 21 * 2 * 64
-        self.fc2 = nn.Linear(128, 12)
+        self.batch1 = nn.BatchNorm2d(32)
+        self.batch2 = nn.BatchNorm2d(64)
+        self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
+        self.fc2 = nn.Linear(256, 12)
 
     def forward(self, x):
         x = self.conv1(x)
+        x = self.batch1(x)
         x = F.relu(x)
         x = self.conv2(x)
+        x = self.batch2(x)
         x = F.relu(x)
         #x = F.max_pool2d(x, 2)
         x = self.dropout1(x)
@@ -63,18 +67,26 @@ def get_loss(output, target):
 
         # TODO : This should be removed
         # TODO : loss calculation must be improved
-        print(output_data[0], ", ", target_data[0])
+        # print(output_data[0], ", ", target_data[0])
+        # print(diff_data)
+        # print((diff_data ** 2).sum())
+        # print((output_data ** 2).sum())
+        # print((target_data ** 2).sum())
+        # print()
 
         sum_e += (diff_data ** 2).sum()/(target_data ** 2).sum()
 
     sum_e /= len(diff)
+    
+    #print(sum_e)
         
     return sum_e
 
 
-def test(model, device, test_loader):
+def test(model, device, train_loader, test_loader):
     model.eval()
     test_loss = 0
+    train_loss = 0
     correct = 0
     t = None
     with torch.no_grad():
@@ -88,10 +100,22 @@ def test(model, device, test_loader):
             # print(len(pred))
             # print(target.view_as(pred))
             # correct += pred.eq(target.view_as(pred)).sum().item()
-    
-    test_loss /= len(test_loader.dataset)
 
-    print('\nTest set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    with torch.no_grad():
+        for data, target in train_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+            train_loss += get_loss(output, target)
+
+    
+    test_loss /= len(test_loader)
+    train_loss /= len(train_loader)
+
+    print('\nTrain set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)'.format(
+        train_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
+
+    print('\nValidation set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
@@ -170,7 +194,7 @@ def main():
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
-        test(model, device, test_loader)
+        test(model, device, train_loader, test_loader)
         scheduler.step()
 
     #if args.save_model:

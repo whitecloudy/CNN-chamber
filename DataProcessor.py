@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import random
 import time
+import cmath
+import copy
 
 SIZE_OF_DATA = 27
 
@@ -84,10 +86,16 @@ class DataProcessor:
         for data, label, key in self.data_handler:
             if key not in self.data_key_list:
                 continue
+            """
             self.data_label_list += self.prepare_data(data=data,
                                                       label=label,
                                                       key=key,
                                                       multiply=multiply)
+            """
+            self.data_label_list += self.data_augmentation(data=data,
+                                                           label=label,
+                                                           key=key,
+                                                           multiply=multiply)
 
     def prepare_data(self, data, label, key, multiply=1):
         prepared_data_list = []
@@ -113,6 +121,47 @@ class DataProcessor:
                 prepared_data_list.append(dataParser(data_to_parse, label, key, self.normalize))
 
         return prepared_data_list
+
+    def data_augmentation(self, data, label, key, multiply):
+        original_data = copy.deepcopy(data)
+        original_label = copy.deepcopy(label)
+        original_key = copy.deepcopy(key)
+
+        result_list = []
+
+        tag_sig_divide = 4
+        phase_vec_divide = 4
+        
+        # add original data
+        result_list += self.prepare_data(data, label, key, multiply)
+        for i in range(tag_sig_divide):
+            data = copy.deepcopy(original_data)
+            label = copy.deepcopy(original_label)
+            key = copy.deepcopy(original_key)
+
+            shift_val = cmath.rect(1, cmath.pi*(i/(tag_sig_divide/2))) * cmath.rect(1, cmath.pi*(np.random.rand()*2/tag_sig_divide))
+
+            for d in data:
+                d.tag_sig *= shift_val
+                d.noise_std *= shift_val
+                d.noise_std = complex(abs(d.noise_std.real), abs(d.noise_std.imag))
+
+            label *= shift_val
+
+            shift_key = key + (i, 0)
+    
+            result_list += self.prepare_data(data, label, shift_key, multiply)
+            
+            for r in range(1, phase_vec_divide):
+                random_shift_val = cmath.rect(1, cmath.pi*(r/(phase_vec_divide/2))) * cmath.rect(1, cmath.pi*(np.random.rand()*2/phase_vec_divide))
+                for d in data:
+                    d.phase_vec *= random_shift_val
+                label *= random_shift_val.conjugate()
+
+                random_key = key + (i, r)
+                result_list += self.prepare_data(data, label, random_key, multiply)
+
+        return result_list
 
     def __len__(self):
         return len(self.data_label_list)

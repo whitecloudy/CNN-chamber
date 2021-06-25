@@ -197,6 +197,18 @@ def main():
         test(model, device, train_loader, test_loader)
         scheduler.step()
 
+        if epoch is args.epochs:
+            break
+
+        # renew dataset
+        dataset_handler.renew_dataset()
+        training_dataset = dataset_handler.training_dataset
+        test_dataset = dataset_handler.test_dataset
+        
+        train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
+        test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+
+
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")
 

@@ -9,6 +9,9 @@ class BeamDataset(Dataset):
     def __init__(self, multiply, key_list, normalize=None):
         self.data_processor = DataProcessor(multiply, key_list, normalize)
 
+    def renew_data(self, multiply):
+        self.data_processor.prepare_data(multiply)
+
     def __len__(self):
         return len(self.data_processor)
 
@@ -16,7 +19,7 @@ class BeamDataset(Dataset):
         return self.data_processor[idx]
 
 class DatasetHandler:
-    def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=10):
+    def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=3):
         self.key_list = global_key_list
         self.key_usable = []
         self.key_trainable = []
@@ -61,7 +64,15 @@ class DatasetHandler:
         
         self.training_dataset = BeamDataset(self.multiply, self.key_for_training)#, self.normalize)
         self.normalize = self.training_dataset.data_processor.normalize
+        self.training_normalize = self.training_dataset.data_processor.normalize
+
         self.test_dataset = BeamDataset(self.multiply, self.key_for_test, self.normalize)
+        self.testing_normalize = self.test_dataset.data_processor.normalize
+
+
+    def renew_dataset(self):
+        self.training_dataset.renew_data(self.multiply)
+        self.test_dataset.renew_data(self.multiply)
 
 
     def printLength(self):
@@ -71,6 +82,16 @@ class DatasetHandler:
 
 def main():
     d = DatasetHandler(error_thres=0.15)
+    print("<<<<<<<Training>>>>>>>>")
+    for norm in d.training_normalize:
+        print(norm)
+        print()
+    print()
+    print("<<<<<<<Validation>>>>>>>>")
+    for norm in d.testing_normalize:
+        print(norm)
+        print()
+    
     d.printLength()
 
 

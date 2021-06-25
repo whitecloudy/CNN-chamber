@@ -15,6 +15,7 @@ class dataParser:
         self.y_origin = label
         self.tag_norm = normalize[0]
         self.noise_norm = normalize[1]
+        self.channel_norm = normalize[2]
         self.x_data = self.parse_data(data)
         self.y_data = self.parse_label(label)
         self.key = key
@@ -60,44 +61,71 @@ global_key_list = list(global_data_handler.getKey())
 class DataProcessor:
     def __init__(self, multiply=1, key_list=global_key_list, normalize=None):
         self.data_handler = global_data_handler
-        self.data_label_list = []
-        self.data_key_list = key_list
+        self.output_list = []
+        self.key_list = key_list
+        self.data_label_key_list = []
+        
+        # data augmentation
+        for data, label, key in self.data_handler:
+            if key not in self.key_list:
+                continue
+            self.data_label_key_list.append((data, label, key))
+            self.data_label_key_list += self.data_augmentation(data=data,
+                                                               label=label,
+                                                               key=key)
 
+        print("Data Augmentation Complete")
+
+        # config normalize value
         if normalize is None:
-            mean_tag = 0.0
-            mean_std = 0.0
-            data_len = 0
-            for data, label, key in self.data_handler:
-                if key not in self.data_key_list:
-                    continue
-
-                data_len += len(data)
-                for d in data:
-                    mean_tag += abs(d.tag_sig)
-                    mean_std += abs(d.noise_std)
-
-            mean_tag /= data_len
-            mean_std /= data_len
-
-            self.normalize = (mean_tag, mean_std)
+            self.normalize = self.calculate_normalize()
         else:
             self.normalize = normalize
+        
+        # prepare output data
+        self.prepare_data(multiply)
 
-        for data, label, key in self.data_handler:
-            if key not in self.data_key_list:
+
+    def prepare_data(self, multiply):
+        self.output_list = []
+        for data, label, key in self.data_label_key_list:
+            self.output_list += self.make_output_data(data, label, key, multiply)
+
+
+    def calculate_normalize(self):
+        mean_tag = 0.0
+        mean_std = 0.0
+        mean_label = np.zeros((6, 1))
+        avg_tag = 0.0+0.0j
+        avg_std = 0.0+0.0j
+        avg_label = np.zeros((6, 1), dtype='complex128')
+
+        data_len = 0
+        for data, label, key in self.data_label_key_list:
+            if key not in self.key_list:
                 continue
-            """
-            self.data_label_list += self.prepare_data(data=data,
-                                                      label=label,
-                                                      key=key,
-                                                      multiply=multiply)
-            """
-            self.data_label_list += self.data_augmentation(data=data,
-                                                           label=label,
-                                                           key=key,
-                                                           multiply=multiply)
 
-    def prepare_data(self, data, label, key, multiply=1):
+            data_len += len(data)
+            for d in data:
+                mean_tag += abs(d.tag_sig)
+                mean_std += abs(d.noise_std)
+                avg_tag += d.tag_sig
+                avg_std += d.noise_std
+            mean_label += np.abs(label)
+            avg_label += label
+
+        mean_tag /= data_len
+        mean_std /= data_len
+        avg_tag /= data_len
+        avg_std /= data_len
+
+        mean_label /= len(self.data_handler)
+        avg_label /= len(self.data_handler)
+
+        return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
+
+
+    def make_output_data(self, data, label, key, multiply=1):
         prepared_data_list = []
 
         random.seed(time.time())
@@ -122,7 +150,7 @@ class DataProcessor:
 
         return prepared_data_list
 
-    def data_augmentation(self, data, label, key, multiply):
+    def data_augmentation(self, data, label, key):
         original_data = copy.deepcopy(data)
         original_label = copy.deepcopy(label)
         original_key = copy.deepcopy(key)
@@ -133,7 +161,6 @@ class DataProcessor:
         phase_vec_divide = 4
         
         # add original data
-        result_list += self.prepare_data(data, label, key, multiply)
         for i in range(tag_sig_divide):
             data = copy.deepcopy(original_data)
             label = copy.deepcopy(original_label)
@@ -150,7 +177,7 @@ class DataProcessor:
 
             shift_key = key + (i, 0)
     
-            result_list += self.prepare_data(data, label, shift_key, multiply)
+            result_list.append((data, label, shift_key))
             
             for r in range(1, phase_vec_divide):
                 random_shift_val = cmath.rect(1, cmath.pi*(r/(phase_vec_divide/2))) * cmath.rect(1, cmath.pi*(np.random.rand()*2/phase_vec_divide))
@@ -159,15 +186,15 @@ class DataProcessor:
                 label *= random_shift_val.conjugate()
 
                 random_key = key + (i, r)
-                result_list += self.prepare_data(data, label, random_key, multiply)
+                result_list.append((data, label, random_key))
 
         return result_list
 
     def __len__(self):
-        return len(self.data_label_list)
+        return len(self.output_list)
 
     def __getitem__(self, idx):
-        return self.data_label_list[idx].x_data, self.data_label_list[idx].y_data
+        return self.output_list[idx].x_data, self.output_list[idx].y_data
 
 
 def main():

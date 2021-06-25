@@ -67,10 +67,18 @@ class DataHandler:
         for data in self.data_dict[key]:
             W.append(data.phase_vec)
             A.append([data.tag_sig])
-
         
         W = np.matrix(W)
         A = np.matrix(A)
+
+        """
+        u, s, vh = np.linalg.svd(W)
+        get_val = 0.0
+        for s_elem in s:
+            get_val += (1/s_elem)**2
+        print(get_val**0.5)
+        #s_inv = s.getI()
+        """
 
         return (W.getH() * W).getI() * (W.getH() * A)
 
@@ -96,9 +104,9 @@ class DataHandler:
         eval_value = np.array(eval_value)
         if printFlag:
             print(np.mean(eval_value))
-            print(np.mean(sig_data))
-            print(np.std(eval_value))
-            print(np.std(sig_data)/np.mean(sig_data))
+            #print(np.mean(sig_data))
+            #print(np.std(eval_value))
+            #print(np.std(sig_data)/np.mean(sig_data))
 
         return np.mean(eval_value), len(self.data_dict[key])
 
@@ -119,7 +127,7 @@ def main():
     
     for i in d.data_dict.keys():
         print(i, len(d.data_dict[i]))
-        d.evalLabel(i)
+        d.evalLabel(i, True)
         print()
     # for data, label in d:
 

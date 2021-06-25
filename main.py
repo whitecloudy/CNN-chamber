@@ -107,7 +107,6 @@ def test(model, device, train_loader, test_loader):
             data, target = data.to(device), target.to(device)
             output = model(data)
             train_loss += get_loss(output, target)
-
     
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
@@ -119,6 +118,8 @@ def test(model, device, train_loader, test_loader):
     print('\nValidation set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
+
+    return float(train_loss), float(test_loss)
 
 
 def main():
@@ -146,6 +147,8 @@ def main():
                         help='number of gpu use')
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
+    parser.add_argument('--log', type=str, default=None,
+                        help='If log file name given, we write Logs')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -193,10 +196,23 @@ def main():
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+
+    if args.log != None:
+        logfile = open(args.log, "w")
+        logCSV = csv.writer(logfile)
+        logCSV.writerow(["epoch", "train loss", "test loss"])
+    else:
+        logfile = None
+        logCSV = None
+
+
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
-        test(model, device, train_loader, test_loader)
+        train_loss, test_loss = test(model, device, train_loader, test_loader)
         scheduler.step()
+
+        if logCSV is not None:
+            logCSV.writerow([epoch, train_loss, test_loss])
 
         if epoch is args.epochs:
             break
@@ -208,7 +224,8 @@ def main():
         
         train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
         test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-
+    
+    logfile.close()
 
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")

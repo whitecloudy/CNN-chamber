@@ -8,6 +8,7 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
 import numpy as np
+import csv
 
 
 class Net(nn.Module):

@@ -48,8 +48,9 @@ class dataParser:
 
         for i in range(6):
             label_element = complex(label[i])
-            y_data.append(label_element.real/self.tag_norm)
-            y_data.append(label_element.imag/self.tag_norm)
+            norm = float(self.channel_norm[i])
+            y_data.append(label_element.real/norm)
+            y_data.append(label_element.imag/norm)
 
         return torch.FloatTensor(np.array(y_data))
 

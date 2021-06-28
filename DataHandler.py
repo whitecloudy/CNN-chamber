@@ -2,6 +2,7 @@ import glob
 import csv
 import cmath
 import numpy as np
+import copy
 
 DATADIR = "data/*"
 
@@ -9,17 +10,30 @@ class dataParser:
     """
     Parsing Data
     """
-    def __init__(self, row, filename):
-        self.phase_vec = []
+    def __init__(self, phase_vec, data_kind, round_num, noise_std, tag_sig):
+        self.phase_vec = np.copy(phase_vec)
+        self.data_kind = data_kind
+        self.round_num = round_num
+        self.noise_std = noise_std
+        self.tag_sig = tag_sig
 
+    @classmethod
+    def from_row_filename(cls, row, filename):
+        phase_vec = []
         for i in range(6):
-            self.phase_vec.append(cmath.rect(1, int(row[i])/180 * cmath.pi))
-        self.phase_vec = np.array(self.phase_vec)
+            phase_vec.append(cmath.rect(1, int(row[i])/180 * cmath.pi))
+        phase_vec = np.array(phase_vec)
 
-        self.data_kind = (filename, row[6], row[7], row[8], row[9])
-        self.round_num = int(row[10])
-        self.noise_std = complex(float(row[11]), float(row[12]))
-        self.tag_sig = complex(-float(row[13]), -float(row[14]))
+        data_kind = (filename, row[6], row[7], row[8], row[9])
+        round_num = int(row[10])
+        noise_std = complex(float(row[11]), float(row[12]))
+        tag_sig = complex(-float(row[13]), -float(row[14]))
+
+        return cls(phase_vec, data_kind, round_num, noise_std, tag_sig)
+
+    @classmethod
+    def copySrc(cls, src):
+        return cls(src.phase_vec, src.data_kind, src.round_num, src.noise_std, src.tag_sig)
 
 
 class DataHandler:
@@ -43,7 +57,7 @@ class DataHandler:
                         if first:
                             first = False
                             continue
-                        member = dataParser(row, filename)
+                        member = dataParser.from_row_filename(row, filename)
 
                         if member.data_kind in tmp_dict:
                             tmp_dict[member.data_kind].append(member)

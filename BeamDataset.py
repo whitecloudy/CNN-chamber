@@ -66,7 +66,7 @@ class DatasetHandler:
         self.normalize = self.training_dataset.data_processor.normalize
         self.training_normalize = self.training_dataset.data_processor.normalize
 
-        self.test_dataset = BeamDataset(self.multiply, self.key_for_test)#, self.normalize)
+        self.test_dataset = BeamDataset(self.multiply, self.key_for_test, self.normalize)
         self.testing_normalize = self.test_dataset.data_processor.normalize
 
 

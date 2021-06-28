@@ -1,4 +1,5 @@
 from DataHandler import DataHandler
+import DataHandler as DH
 import numpy as np
 import torch
 import random
@@ -70,7 +71,6 @@ class DataProcessor:
         for data, label, key in self.data_handler:
             if key not in self.key_list:
                 continue
-            self.data_label_key_list.append((data, label, key))
             self.data_label_key_list += self.data_augmentation(data=data,
                                                                label=label,
                                                                key=key)
@@ -102,9 +102,8 @@ class DataProcessor:
         avg_label = np.zeros((6, 1), dtype='complex128')
 
         data_len = 0
+
         for data, label, key in self.data_label_key_list:
-            if key not in self.key_list:
-                continue
 
             data_len += len(data)
             for d in data:
@@ -119,9 +118,9 @@ class DataProcessor:
         mean_std /= data_len
         avg_tag /= data_len
         avg_std /= data_len
-
-        mean_label /= len(self.data_handler)
-        avg_label /= len(self.data_handler)
+        
+        mean_label /= len(self.data_label_key_list)
+        avg_label /= len(self.data_label_key_list)
 
         return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
 
@@ -152,44 +151,77 @@ class DataProcessor:
         return prepared_data_list
 
     def data_augmentation(self, data, label, key):
-        original_data = copy.deepcopy(data)
-        original_label = copy.deepcopy(label)
-        original_key = copy.deepcopy(key)
-
         result_list = []
+        result_list.append((data, label, key))
 
-        tag_sig_divide = 4
-        phase_vec_divide = 4
-        
-        # add original data
-        for i in range(tag_sig_divide):
-            data = copy.deepcopy(original_data)
-            label = copy.deepcopy(original_label)
-            key = copy.deepcopy(original_key)
+        aug_result = []
 
-            shift_val = cmath.rect(1, cmath.pi*(i/(tag_sig_divide/2))) * cmath.rect(1, cmath.pi*(np.random.rand()*2/tag_sig_divide))
+        for d, l, k in result_list:
+            aug_result += self.data_aug1(d, l, k)
+        result_list += aug_result
 
-            for d in data:
-                d.tag_sig *= shift_val
-                d.noise_std *= shift_val
-                d.noise_std = complex(abs(d.noise_std.real), abs(d.noise_std.imag))
+        aug_result = []
 
-            label *= shift_val
-
-            shift_key = key + (i, 0)
-    
-            result_list.append((data, label, shift_key))
-            
-            for r in range(1, phase_vec_divide):
-                random_shift_val = cmath.rect(1, cmath.pi*(r/(phase_vec_divide/2))) * cmath.rect(1, cmath.pi*(np.random.rand()*2/phase_vec_divide))
-                for d in data:
-                    d.phase_vec *= random_shift_val
-                label *= random_shift_val.conjugate()
-
-                random_key = key + (i, r)
-                result_list.append((data, label, random_key))
+        for d, l, k in result_list:
+            aug_result += self.data_aug2(d, l, k)
+        result_list += aug_result
 
         return result_list
+
+    def data_aug1(self, data, label, key):
+        result_list = []
+
+        tag_sig_divide = 8
+        
+        for i in range(1, tag_sig_divide):
+            fix_shift = cmath.rect(1, cmath.pi*(i/(tag_sig_divide/2))) 
+            random_shift = cmath.rect(1, cmath.pi*(np.random.rand()*2/tag_sig_divide))
+
+            shift_val = fix_shift * random_shift
+            shift_data_list = []
+
+            for d in data:
+                shift_data = copy.deepcopy(d)
+                shift_data.tag_sig *= shift_val
+                shift_data.noise_std *= shift_val
+                shift_data.noise_std = complex(abs(d.noise_std.real), abs(d.noise_std.imag))
+                shift_data_list.append(shift_data)
+
+            shift_label = label * shift_val
+
+            shift_key = key + (i,)
+    
+            result_list.append((shift_data_list, shift_label, shift_key))
+
+        return result_list
+
+
+    def data_aug2(self, data, label, key):
+        result_list = []
+
+        phase_vec_divide = 8
+        
+        for r in range(1, phase_vec_divide):
+            fix_shift = cmath.rect(1, cmath.pi*(r/(phase_vec_divide/2))) 
+            random_shift = cmath.rect(1, cmath.pi*(np.random.rand()*2/phase_vec_divide))
+
+            shift_val = fix_shift * random_shift
+
+            shift_data_list = []
+
+            for d in data:
+                shift_data = copy.deepcopy(d)
+                shift_data.phase_vec *= shift_val
+                shift_data_list.append(shift_data)
+
+            shift_label = label * shift_val.conjugate()
+
+            shift_key = key + (r,)
+
+            result_list.append((shift_data_list, shift_label, shift_key))
+
+        return result_list
+
 
     def __len__(self):
         return len(self.output_list)
@@ -199,12 +231,13 @@ class DataProcessor:
 
 
 def main():
-    d = DataProcessor(multiply=5)
+    d = DataProcessor(multiply=1)
 
     # for x, y in d:
         #print(y.shape)
 
     print(len(d))
+    print(d.normalize)
 
 
 if __name__ == "__main__":

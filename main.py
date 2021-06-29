@@ -58,6 +58,27 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 break
 
 def get_loss(output, target):
+    """
+    sum_e = 0.0
+
+    for i, output_data in enumerate(output):
+        target_data = target[i]
+
+        output_c = []
+        target_c = []
+
+        for c in range(0, len(output_data), 2):
+            target_complex = complex(target_data[c], target_data[c+1])
+            output_complex = complex(output_data[c], output_data[c+1])
+
+            output_c.append(output_complex)
+            target_c.append(target_complex)
+
+        output_data = np.array(output_c)
+        target_data = np.array(target_c)
+
+        sum_e += (abs(np.dot(output_data, target_data)))/(np.linalg.norm(output_data) * np.linalg.norm(target_data))
+    """
     diff = output - target
 
     sum_e = 0.0
@@ -77,9 +98,7 @@ def get_loss(output, target):
 
         sum_e += (diff_data ** 2).sum()/(target_data ** 2).sum()
 
-    sum_e /= len(diff)
-    
-    #print(sum_e)
+    sum_e /= len(output)
         
     return sum_e
 

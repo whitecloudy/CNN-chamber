@@ -41,8 +41,10 @@ class dataParser:
 
             real_list.append(real)
             imag_list.append(imag)
+        return_val = torch.FloatTensor(np.array([real_list, imag_list]))
 
-        return torch.FloatTensor(np.array([real_list, imag_list]))
+        return return_val
+
 
     def parse_label(self, label):
         y_data = []
@@ -174,8 +176,8 @@ class DataProcessor:
         tag_sig_divide = 8
         
         for i in range(1, tag_sig_divide):
-            fix_shift = cmath.rect(1, cmath.pi*(i/(tag_sig_divide/2))) 
-            random_shift = cmath.rect(1, cmath.pi*(np.random.rand()*2/tag_sig_divide))
+            fix_shift = cmath.rect(1, 2*cmath.pi*(i/tag_sig_divide)) 
+            random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()*tag_sig_divide))
 
             shift_val = fix_shift * random_shift
             shift_data_list = []
@@ -202,8 +204,8 @@ class DataProcessor:
         phase_vec_divide = 8
         
         for r in range(1, phase_vec_divide):
-            fix_shift = cmath.rect(1, cmath.pi*(r/(phase_vec_divide/2))) 
-            random_shift = cmath.rect(1, cmath.pi*(np.random.rand()*2/phase_vec_divide))
+            fix_shift = cmath.rect(1, 2*cmath.pi*(r/phase_vec_divide)) 
+            random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/phase_vec_divide))
 
             shift_val = fix_shift * random_shift
 

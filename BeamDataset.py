@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from numpy.random import randn
 from torch.utils.data import Dataset
 from DataProcessor import DataProcessor, global_key_list, global_data_handler
@@ -61,6 +62,7 @@ class DatasetHandler:
         self.key_for_test += self.key_usable
         #self.key_for_training = self.key_trainable[0:training_key_length]
         #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
+        #self.normalize = (0.028442474880584625, 0.0002280199237627333, np.array([0.02179932, 0.03584705, 0.02130222, 0.00743575, 0.00666348, 0.00799966]))
         
         self.training_dataset = BeamDataset(self.multiply, self.key_for_training)#, self.normalize)
         self.normalize = self.training_dataset.data_processor.normalize
@@ -84,12 +86,12 @@ def main():
     d = DatasetHandler(error_thres=0.15)
     print("<<<<<<<Training>>>>>>>>")
     for norm in d.training_normalize:
-        print(norm)
+        print(abs(norm))
         print()
     print()
     print("<<<<<<<Validation>>>>>>>>")
     for norm in d.testing_normalize:
-        print(norm)
+        print(abs(norm))
         print()
     
     d.printLength()

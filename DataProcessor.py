@@ -19,7 +19,38 @@ class dataParser:
         self.channel_norm = normalize[2]
         self.x_data = self.parse_data(data)
         self.y_data = self.parse_label(label)
+        self.heur_data = self.cal_heuristic(data)
         self.key = key
+
+        if abs(self.heur_data - self.y_data).sum() > 6:
+            print(self.key)
+
+
+    def cal_heuristic(self, data):
+        W = []
+        A = []
+
+        for d in data:
+            W.append(d.phase_vec)
+            A.append([d.tag_sig])
+
+        W = np.matrix(W)
+        A = np.matrix(A)
+
+        W_inv = (W.getH() * W).getI() * W.getH()
+        H = (W_inv * A)
+        H = H.getT().getA()[0]
+
+        y_data = []
+
+        for i in range(6):
+            label_element = H[i]
+            norm = float(self.channel_norm[i])
+            y_data.append(label_element.real/norm)
+            y_data.append(label_element.imag/norm)
+
+        return torch.FloatTensor(np.array(y_data))
+
        
     def parse_data(self, data):
         real_list = []
@@ -73,6 +104,10 @@ class DataProcessor:
         for data, label, key in self.data_handler:
             if key not in self.key_list:
                 continue
+
+            if key[3] == ' directionalrefine':
+                continue
+
             self.data_label_key_list += self.data_augmentation(data=data,
                                                                label=label,
                                                                key=key)
@@ -91,6 +126,9 @@ class DataProcessor:
 
     def prepare_data(self, multiply):
         self.output_list = []
+        random.seed(time.time())
+        random.shuffle(self.data_label_key_list)
+
         for data, label, key in self.data_label_key_list:
             self.output_list += self.make_output_data(data, label, key, multiply)
 
@@ -152,6 +190,7 @@ class DataProcessor:
 
         return prepared_data_list
 
+
     def data_augmentation(self, data, label, key):
         result_list = []
         result_list.append((data, label, key))
@@ -169,6 +208,7 @@ class DataProcessor:
         result_list += aug_result
 
         return result_list
+
 
     def data_aug1(self, data, label, key):
         result_list = []
@@ -229,7 +269,7 @@ class DataProcessor:
         return len(self.output_list)
 
     def __getitem__(self, idx):
-        return self.output_list[idx].x_data, self.output_list[idx].y_data
+        return self.output_list[idx].x_data, self.output_list[idx].y_data, self.output_list[idx].heur_data
 
 
 def main():

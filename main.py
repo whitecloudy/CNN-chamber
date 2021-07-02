@@ -43,7 +43,7 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target, hur) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -85,7 +85,6 @@ def get_loss(output, target):
 
     for i, diff_data in enumerate(diff):
         target_data = target[i]
-        output_data = output[i]
 
         # TODO : This should be removed
         # TODO : loss calculation must be improved
@@ -107,13 +106,16 @@ def test(model, device, train_loader, test_loader):
     model.eval()
     test_loss = 0
     train_loss = 0
-    correct = 0
-    t = None
+    test_hur_loss = 0
+    train_hur_loss = 0
     with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
+        for data, target, hur in test_loader:
+            data, target, hur = data.to(device), target.to(device), hur.to(device)
+
             output = model(data)
+
             test_loss += get_loss(output, target)
+            test_hur_loss += get_loss(hur, target)
             # test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
             # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             # print(target)
@@ -122,23 +124,26 @@ def test(model, device, train_loader, test_loader):
             # correct += pred.eq(target.view_as(pred)).sum().item()
 
     with torch.no_grad():
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
+        for data, target, hur in train_loader:
+            data, target, hur = data.to(device), target.to(device), hur.to(device)
+
             output = model(data)
+
             train_loss += get_loss(output, target)
+            train_hur_loss += get_loss(hur, target)
     
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
+    test_hur_loss /= len(test_loader)
+    train_hur_loss /= len(train_loader)
 
-    print('\nTrain set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)'.format(
-        train_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}'.format(
+        train_loss, train_hur_loss))
 
-    print('\nValidation set: Average loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}\n'.format(
+        test_loss, train_hur_loss))
 
-    return float(train_loss), float(test_loss)
+    return float(train_loss), float(test_loss), float(train_hur_loss), float(test_hur_loss)
 
 
 def main():
@@ -227,11 +232,11 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
-        train_loss, test_loss = test(model, device, train_loader, test_loader)
+        train_loss, test_loss, train_hur_loss, test_hur_loss = test(model, device, train_loader, test_loader)
         scheduler.step()
 
         if logCSV is not None:
-            logCSV.writerow([epoch, train_loss, test_loss])
+            logCSV.writerow([epoch, train_loss, test_loss, train_hur_loss, test_hur_loss])
 
         if epoch is args.epochs:
             break

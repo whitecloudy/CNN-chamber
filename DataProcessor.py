@@ -1,11 +1,13 @@
-from DataHandler import DataHandler
-import DataHandler as DH
 import numpy as np
 import torch
 import random
 import time
 import cmath
 import copy
+
+from DataHandler import DataHandler
+from itertools import permutations
+import ArgsHandler
 
 SIZE_OF_DATA = 27
 
@@ -22,34 +24,42 @@ class dataParser:
         self.heur_data = self.cal_heuristic(data)
         self.key = key
 
-        if abs(self.heur_data - self.y_data).sum() > 6:
-            print(self.key)
-
 
     def cal_heuristic(self, data):
         W = []
         A = []
 
+        W_size = ArgsHandler.args.heu
+
         for d in data:
             W.append(d.phase_vec)
             A.append([d.tag_sig])
+            if W_size <= 1:
+                break
+            else:
+                W_size -= 1
 
         W = np.matrix(W)
         A = np.matrix(A)
 
-        W_inv = (W.getH() * W).getI() * W.getH()
-        H = (W_inv * A)
-        H = H.getT().getA()[0]
+        try:
+            WHW = (W.getH() * W)
 
-        y_data = []
+            W_inv = WHW.getI() * W.getH()
+            H = (W_inv * A)
+            H = H.getT().getA()[0]
 
-        for i in range(6):
-            label_element = H[i]
-            norm = float(self.channel_norm[i])
-            y_data.append(label_element.real/norm)
-            y_data.append(label_element.imag/norm)
+            result_data = []
 
-        return torch.FloatTensor(np.array(y_data))
+            for i in range(6):
+                label_element = H[i]
+                norm = float(self.channel_norm[i])
+                result_data.append(label_element.real/norm)
+                result_data.append(label_element.imag/norm)
+
+            return torch.FloatTensor(np.array(result_data))
+        except np.linalg.LinAlgError:
+            return self.y_data
 
        
     def parse_data(self, data):
@@ -261,6 +271,17 @@ class DataProcessor:
             shift_key = key + (r,)
 
             result_list.append((shift_data_list, shift_label, shift_key))
+
+        return result_list
+
+    def data_aug3(self, data, label, key):
+        result_list = []
+
+        shuffle_candidate = list(permutations(range(6), 6))
+        shuffle_candidate.remove((0, 1, 2, 3, 4, 5))
+
+        for shuffle in shuffle_candidate:
+            pass
 
         return result_list
 

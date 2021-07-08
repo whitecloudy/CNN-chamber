@@ -1,5 +1,6 @@
 from __future__ import print_function
-import argparse
+import ArgsHandler
+from ArgsHandler import handle_args, test_args
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,7 +10,6 @@ from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
 import numpy as np
 import csv
-
 
 class Net(nn.Module):
     def __init__(self):
@@ -43,7 +43,7 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target, hur) in enumerate(train_loader):
+    for batch_idx, (data, target, heur) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -79,12 +79,26 @@ def get_loss(output, target):
 
         sum_e += (abs(np.dot(output_data, target_data)))/(np.linalg.norm(output_data) * np.linalg.norm(target_data))
     """
-    diff = output - target
+    diff = torch.sum(torch.pow(output - target, 2), 1)
+    target = torch.sum(torch.pow(target, 2), 1)
 
-    sum_e = 0.0
+    sum_list = torch.div(diff, target).tolist()
+    unable_c = 0
 
-    for i, diff_data in enumerate(diff):
-        target_data = target[i]
+    for i, sum_data in enumerate(sum_list):
+        if sum_data == 0.0:
+            unable_c += 1
+            continue
+        
+        while np.isinf(sum_list[i]):
+            unable_c += 1
+            del sum_list[i]
+
+            if len(sum_list) <= i:
+                break
+
+    sum_e = np.sum(sum_list)/(len(output) - unable_c)
+
 
         # TODO : This should be removed
         # TODO : loss calculation must be improved
@@ -95,27 +109,37 @@ def get_loss(output, target):
         # print((target_data ** 2).sum())
         # print()
 
-        sum_e += (diff_data ** 2).sum()/(target_data ** 2).sum()
-
-    sum_e /= len(output)
-        
-    return sum_e
+    return sum_e, unable_c
 
 
 def test(model, device, train_loader, test_loader):
     model.eval()
     test_loss = 0
     train_loss = 0
-    test_hur_loss = 0
-    train_hur_loss = 0
+    test_heur_loss = 0
+    train_heur_loss = 0
+    test_unable_heur = 0
+    train_unable_heur = 0
+
+    total_train = 0
+    total_test = 0
+
     with torch.no_grad():
-        for data, target, hur in test_loader:
-            data, target, hur = data.to(device), target.to(device), hur.to(device)
+        for data, target, heur in test_loader:
+            data, target = data.to(device), target.to(device)
+            heur = heur.to(device)
 
             output = model(data)
 
-            test_loss += get_loss(output, target)
-            test_hur_loss += get_loss(hur, target)
+            tmp_loss, temp = get_loss(output, target)
+            test_loss += tmp_loss
+
+            tmp_loss, temp = get_loss(heur, target)
+            test_heur_loss += tmp_loss
+            test_unable_heur += temp
+
+            total_test += len(data)
+
             # test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
             # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             # print(target)
@@ -124,56 +148,42 @@ def test(model, device, train_loader, test_loader):
             # correct += pred.eq(target.view_as(pred)).sum().item()
 
     with torch.no_grad():
-        for data, target, hur in train_loader:
-            data, target, hur = data.to(device), target.to(device), hur.to(device)
+        for data, target, heur in train_loader:
+            data, target = data.to(device), target.to(device)
+            heur = heur.to(device)
 
             output = model(data)
 
-            train_loss += get_loss(output, target)
-            train_hur_loss += get_loss(hur, target)
-    
+            tmp_loss, temp = get_loss(output, target)
+            train_loss += tmp_loss
+
+            tmp_loss, temp = get_loss(heur, target)
+            train_heur_loss += tmp_loss
+            train_unable_heur += temp
+
+            total_train += len(data)
+
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
-    test_hur_loss /= len(test_loader)
-    train_hur_loss /= len(train_loader)
+    test_heur_loss /= len(test_loader)
+    train_heur_loss /= len(train_loader)
+    test_unable_heur /= total_test
+    train_unable_heur /= total_train
 
-    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}'.format(
-        train_loss, train_hur_loss))
+    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
+        train_loss, train_heur_loss, train_unable_heur*100))
 
-    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}\n'.format(
-        test_loss, train_hur_loss))
+    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
+        test_loss, train_heur_loss, test_unable_heur*100))
 
-    return float(train_loss), float(test_loss), float(train_hur_loss), float(test_hur_loss)
+    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), train_unable_heur, test_heur_loss
+
 
 
 def main():
-    # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=50, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
-                        help='learning rate (default: 1.0)')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
-    parser.add_argument('--dry-run', action='store_true', default=False,
-                        help='quickly check a single pass')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
-    parser.add_argument('--gpunum', type=int, default=0,
-                        help='number of gpu use')
-    parser.add_argument('--save-model', action='store_true', default=False,
-                        help='For Saving the current Model')
-    parser.add_argument('--log', type=str, default=None,
-                        help='If log file name given, we write Logs')
-    args = parser.parse_args()
+    handle_args()
+    args = ArgsHandler.args
+
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
@@ -224,7 +234,7 @@ def main():
     if args.log != None:
         logfile = open(args.log, "w")
         logCSV = csv.writer(logfile)
-        logCSV.writerow(["epoch", "train loss", "test loss"])
+        logCSV.writerow(["epoch", "train loss", "test loss", "train heuristic loss", "test heuristic loss", "train unable count", "test unable count"])
     else:
         logfile = None
         logCSV = None
@@ -232,11 +242,11 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
-        train_loss, test_loss, train_hur_loss, test_hur_loss = test(model, device, train_loader, test_loader)
+        train_loss, test_loss, train_heur_loss, test_heur_loss, train_unable, test_unable = test(model, device, train_loader, test_loader)
         scheduler.step()
 
         if logCSV is not None:
-            logCSV.writerow([epoch, train_loss, test_loss, train_hur_loss, test_hur_loss])
+            logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_unable, test_unable])
 
         if epoch is args.epochs:
             break
@@ -248,8 +258,9 @@ def main():
         
         train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
         test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-    
-    logfile.close()
+
+    if logfile is not None:
+        logfile.close()
 
     #if args.save_model:
     #    torch.save(model.state_dict(), "mnist_cnn.pt")

@@ -58,7 +58,7 @@ class dataParser:
             result_data = []
 
             for i in range(6):
-                label_element = H[i]
+                label_element = H[i]/abs(H[i])
                 norm = float(self.channel_norm[i])
                 result_data.append(label_element.real/norm)
                 result_data.append(label_element.imag/norm)

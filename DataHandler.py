@@ -71,6 +71,7 @@ class DataHandler:
                         self.data_dict[kind] = tmp_dict[kind]
             except IsADirectoryError:
                 pass
+
     def getKey(self):
         return self.data_dict.keys()
 
@@ -94,7 +95,12 @@ class DataHandler:
         #s_inv = s.getI()
         """
 
-        return (W.getH() * W).getI() * (W.getH() * A)
+        channel = (W.getH() * W).getI() * (W.getH() * A)
+        for i, cha in enumerate(channel):
+            channel[i] = (cha/abs(cha)).conj()
+        
+        return channel
+
 
     def getData(self, key):
         return self.data_dict[key]
@@ -136,13 +142,20 @@ class DataHandler:
 
 
 def main():
-    d = DataHandler()
+    data = DataHandler()
     i = 0
     
+    for d,l,k in data:
+        print()
+        for label in l:
+            print(label.conj())
+
+    """
     for i in d.data_dict.keys():
         print(i, len(d.data_dict[i]))
         d.evalLabel(i, True)
         print()
+    """
     # for data, label in d:
 
         

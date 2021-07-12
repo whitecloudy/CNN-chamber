@@ -3,7 +3,7 @@ import argparse
 args = None
 test_args = 10
 
-def handle_args():
+def init_args():
     # Training settings
 
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -33,6 +33,8 @@ def handle_args():
                         help='If log file name given, we write Logs')
     parser.add_argument('--heu', type=int, default=27,
                         help='Heuristic W size')
+    parser.add_argument('--model', type=int, default=1,
+                        help='Select Model number')
 
     global args
     args = parser.parse_args()

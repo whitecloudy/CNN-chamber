@@ -4,7 +4,10 @@ import random
 import time
 import cmath
 import copy
+import sys
 
+from Proc import do_work
+from DataAugmentation import data_augmentation
 from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
@@ -57,7 +60,7 @@ class dataParser:
                 result_data.append(label_element.real/norm)
                 result_data.append(label_element.imag/norm)
 
-            return torch.FloatTensor(np.array(result_data))
+            return np.array(result_data)
         except np.linalg.LinAlgError:
             return self.y_data
 
@@ -82,7 +85,7 @@ class dataParser:
 
             real_list.append(real)
             imag_list.append(imag)
-        return_val = torch.FloatTensor(np.array([real_list, imag_list]))
+        return_val = np.array([real_list, imag_list])
 
         return return_val
 
@@ -96,7 +99,7 @@ class dataParser:
             y_data.append(label_element.real/norm)
             y_data.append(label_element.imag/norm)
 
-        return torch.FloatTensor(np.array(y_data))
+        return np.array(y_data)
 
 
 global_data_handler = DataHandler()
@@ -109,6 +112,7 @@ class DataProcessor:
         self.output_list = []
         self.key_list = key_list
         self.data_label_key_list = []
+        para_tuples = []
         
         # data augmentation
         for data, label, key in self.data_handler:
@@ -118,9 +122,13 @@ class DataProcessor:
             if key[3] == ' directionalrefine':
                 continue
 
-            self.data_label_key_list += self.data_augmentation(data=data,
-                                                               label=label,
-                                                               key=key)
+            para_tuples.append((data, label, key))
+
+        for result in do_work(data_augmentation, para_tuples, 32):
+            self.data_label_key_list += result
+            # self.data_label_key_list += self.data_augmentation(data=data,
+            #                                                   label=label,
+            #                                                   key=key)
 
         print("Data Augmentation Complete")
 
@@ -138,9 +146,40 @@ class DataProcessor:
         self.output_list = []
         random.seed(time.time())
         random.shuffle(self.data_label_key_list)
+        para_tuples = []
+
+        def make_output_data(data, label, key, normalize, multiply=1):
+            prepared_data_list = []
+
+            random.seed(time.time())
+
+            last_idx = 0
+            
+            for count in range(multiply):
+                random.shuffle(data)
+
+                for i in range(0, len(data) - SIZE_OF_DATA + 1, SIZE_OF_DATA):
+                    data_to_parse = data[i:i+SIZE_OF_DATA]
+
+                    prepared_data_list.append(dataParser(data_to_parse, label, key, normalize))
+
+                    last_idx = i
+
+                # handle last remaining data
+                if last_idx < len(data) - SIZE_OF_DATA:
+                    data_to_parse = data[len(data) - SIZE_OF_DATA:len(data)]
+
+                    prepared_data_list.append(dataParser(data_to_parse, label, key, normalize))
+
+            return prepared_data_list
 
         for data, label, key in self.data_label_key_list:
-            self.output_list += self.make_output_data(data, label, key, multiply)
+            para_tuples.append((data, label, key, self.normalize, multiply))
+
+        for result in do_work(make_output_data, para_tuples, 32):
+            self.output_list += result
+
+        print("Done")
 
 
     def calculate_normalize(self):
@@ -175,117 +214,6 @@ class DataProcessor:
         return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
 
 
-    def make_output_data(self, data, label, key, multiply=1):
-        prepared_data_list = []
-
-        random.seed(time.time())
-
-        last_idx = 0
-        
-        for count in range(multiply):
-            random.shuffle(data)
-
-            for i in range(0, len(data) - SIZE_OF_DATA + 1, SIZE_OF_DATA):
-                data_to_parse = data[i:i+SIZE_OF_DATA]
-
-                prepared_data_list.append(dataParser(data_to_parse, label, key, self.normalize))
-
-                last_idx = i
-
-            # handle last remaining data
-            if last_idx < len(data) - SIZE_OF_DATA:
-                data_to_parse = data[len(data) - SIZE_OF_DATA:len(data)]
-
-                prepared_data_list.append(dataParser(data_to_parse, label, key, self.normalize))
-
-        return prepared_data_list
-
-
-    def data_augmentation(self, data, label, key):
-        result_list = []
-        result_list.append((data, label, key))
-
-        aug_result = []
-
-        for d, l, k in result_list:
-            aug_result += self.data_aug1(d, l, k)
-        result_list += aug_result
-
-        aug_result = []
-
-        for d, l, k in result_list:
-            aug_result += self.data_aug2(d, l, k)
-        result_list += aug_result
-
-        return result_list
-
-
-    def data_aug1(self, data, label, key):
-        result_list = []
-
-        tag_sig_divide = 8
-        
-        for i in range(1, tag_sig_divide):
-            fix_shift = cmath.rect(1, 2*cmath.pi*(i/tag_sig_divide)) 
-            random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()*tag_sig_divide))
-
-            shift_val = fix_shift * random_shift
-            shift_data_list = []
-
-            for d in data:
-                shift_data = copy.deepcopy(d)
-                shift_data.tag_sig *= shift_val
-                shift_data.noise_std *= shift_val
-                shift_data.noise_std = complex(abs(d.noise_std.real), abs(d.noise_std.imag))
-                shift_data_list.append(shift_data)
-
-            shift_label = label * shift_val
-
-            shift_key = key + (i,)
-    
-            result_list.append((shift_data_list, shift_label, shift_key))
-
-        return result_list
-
-
-    def data_aug2(self, data, label, key):
-        result_list = []
-
-        phase_vec_divide = 8
-        
-        for r in range(1, phase_vec_divide):
-            fix_shift = cmath.rect(1, 2*cmath.pi*(r/phase_vec_divide)) 
-            random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/phase_vec_divide))
-
-            shift_val = fix_shift * random_shift
-
-            shift_data_list = []
-
-            for d in data:
-                shift_data = copy.deepcopy(d)
-                shift_data.phase_vec *= shift_val
-                shift_data_list.append(shift_data)
-
-            shift_label = label * shift_val.conjugate()
-
-            shift_key = key + (r,)
-
-            result_list.append((shift_data_list, shift_label, shift_key))
-
-        return result_list
-
-    def data_aug3(self, data, label, key):
-        result_list = []
-
-        shuffle_candidate = list(permutations(range(6), 6))
-        shuffle_candidate.remove((0, 1, 2, 3, 4, 5))
-
-        for shuffle in shuffle_candidate:
-            pass
-
-        return result_list
-
-
     def __len__(self):
         return len(self.output_list)
 
@@ -294,7 +222,7 @@ class DataProcessor:
 
 
 def main():
-    d = DataProcessor(multiply=1)
+    d = DataProcessor(multiply=4)
 
     # for x, y in d:
         #print(y.shape)
@@ -304,4 +232,5 @@ def main():
 
 
 if __name__ == "__main__":
+    ArgsHandler.init_args()
     main()

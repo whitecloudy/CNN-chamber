@@ -1,10 +1,10 @@
-import torch
-import numpy as np
-from numpy.random import randn
-from torch.utils.data import Dataset
-from DataProcessor import DataProcessor, global_key_list, global_data_handler
 import random
 import time
+import torch
+import numpy as np
+
+from torch.utils.data import Dataset
+from DataProcessor import DataProcessor, global_key_list, global_data_handler
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, key_list, normalize=None):
@@ -53,11 +53,29 @@ class DatasetHandler:
 
         training_key_length = int(len(self.key_trainable) * self.train_data_ratio)
         
+        key_position = []
         for key in self.key_trainable:
+            pos = key[0:3]
+            if pos not in key_position:
+                key_position.append(pos)
+            """
             if key[0] == 'data/normal_210519.csv':
                 self.key_for_test.append(key)
             else:
                 self.key_for_training.append(key)
+            """
+        random.shuffle(key_position)
+
+        key_len = int(len(key_position) * 0.8)
+
+        training_pos = key_position[:key_len]
+        test_pos = key_position[key_len:]
+
+        for key in self.key_trainable:
+            if key[0:3] in training_pos:
+                self.key_for_training.append(key)
+            elif key[0:3] in test_pos:
+                self.key_for_test.append(key)
 
         self.key_for_test += self.key_usable
         #self.key_for_training = self.key_trainable[0:training_key_length]

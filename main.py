@@ -12,16 +12,27 @@ import numpy as np
 import csv
 
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self, model):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(2, 32, 4, 1) #input is 27 * 8 * 2
-        self.conv2 = nn.Conv2d(32, 64, 4, 1) # input is 24 * 5 * 32
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.batch1 = nn.BatchNorm2d(32)
-        self.batch2 = nn.BatchNorm2d(64)
-        self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
-        self.fc2 = nn.Linear(256, 12)
+        if model == 1:
+            self.conv1 = nn.Conv2d(2, 32, 4, 1) #input is 27 * 8 * 2
+            self.conv2 = nn.Conv2d(32, 64, 4, 1) # input is 24 * 5 * 32
+            self.dropout1 = nn.Dropout(0.25)
+            self.dropout2 = nn.Dropout(0.5)
+            self.batch1 = nn.BatchNorm2d(32)
+            self.batch2 = nn.BatchNorm2d(64)
+            self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
+            self.fc2 = nn.Linear(256, 12)
+        elif model == 2:
+            self.conv1 = nn.Conv2d(2, 64, 4, 1) #input is 27 * 8 * 2
+            self.conv2 = nn.Conv2d(64, 128, 4, 1) # input is 24 * 5 * 32
+            self.dropout1 = nn.Dropout(0.25)
+            self.dropout2 = nn.Dropout(0.5)
+            self.batch1 = nn.BatchNorm2d(64)
+            self.batch2 = nn.BatchNorm2d(128)
+            self.fc1 = nn.Linear(21 * 2 * 128, 1024) # 21 * 2 * 64
+            self.fc2 = nn.Linear(1024, 12)
+
 
     def forward(self, x):
         x = self.conv1(x)
@@ -79,10 +90,10 @@ def get_loss(output, target):
 
         sum_e += (abs(np.dot(output_data, target_data)))/(np.linalg.norm(output_data) * np.linalg.norm(target_data))
     """
-    diff = torch.sum(torch.pow(output - target, 2), 1)
-    target = torch.sum(torch.pow(target, 2), 1)
+    sum_list = torch.sum(torch.pow(output - target, 2), 1).tolist()
+    #target = torch.sum(torch.pow(target, 2), 1)
 
-    sum_list = torch.div(diff, target).tolist()
+    #sum_list = torch.div(diff, target).tolist()
     unable_c = 0
 
     for i, sum_data in enumerate(sum_list):
@@ -226,7 +237,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
-    model = Net().to(device)
+    model = Net(args.model).to(device)
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)

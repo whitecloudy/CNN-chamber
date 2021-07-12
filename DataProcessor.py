@@ -34,6 +34,9 @@ class dataParser:
 
         W_size = ArgsHandler.args.heu
 
+        if W_size < 6:
+            return self.y_data
+
         for d in data:
             W.append(d.phase_vec)
             A.append([d.tag_sig])
@@ -113,7 +116,7 @@ class DataProcessor:
         self.key_list = key_list
         self.data_label_key_list = []
         para_tuples = []
-        
+
         # data augmentation
         for data, label, key in self.data_handler:
             if key not in self.key_list:
@@ -124,12 +127,27 @@ class DataProcessor:
 
             para_tuples.append((data, label, key))
 
-        for result in do_work(data_augmentation, para_tuples, 32):
-            self.data_label_key_list += result
-            # self.data_label_key_list += self.data_augmentation(data=data,
-            #                                                   label=label,
-            #                                                   key=key)
+        import hashlib
+        import pickle
+        import os
 
+        tuples_byte = pickle.dumps(para_tuples)
+        hash_handler = hashlib.sha3_224()
+        hash_handler.update(tuples_byte)
+        hash_filename = "cache/" + hash_handler.digest().hex()
+
+        if os.path.isfile(hash_filename):
+            print("Cache file found")
+            with open(hash_filename, "rb") as cache_file:
+                self.data_label_key_list = pickle.load(cache_file)
+        else:
+            print("No Cache file found")
+            for result in do_work(data_augmentation, para_tuples, 32):
+                self.data_label_key_list += result
+            
+            with open(hash_filename, "wb") as cache_file:
+                pickle.dump(self.data_label_key_list, cache_file)
+        
         print("Data Augmentation Complete")
 
         # config normalize value
@@ -144,8 +162,6 @@ class DataProcessor:
 
     def prepare_data(self, multiply):
         self.output_list = []
-        random.seed(time.time())
-        random.shuffle(self.data_label_key_list)
         para_tuples = []
 
         def make_output_data(data, label, key, normalize, multiply=1):
@@ -218,7 +234,7 @@ class DataProcessor:
         return len(self.output_list)
 
     def __getitem__(self, idx):
-        return self.output_list[idx].x_data, self.output_list[idx].y_data, self.output_list[idx].heur_data
+        return torch.FloatTensor(self.output_list[idx].x_data), torch.FloatTensor(self.output_list[idx].y_data), torch.FloatTensor(self.output_list[idx].heur_data)
 
 
 def main():

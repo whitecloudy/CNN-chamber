@@ -35,7 +35,6 @@ class dataParser:
         W_size = ArgsHandler.args.heu
 
         if W_size < 6:
-            print("hello")
             return self.y_data
 
         for d in data:
@@ -66,7 +65,10 @@ class dataParser:
 
             return np.array(result_data)
         except np.linalg.LinAlgError:
-            return self.y_data
+            for i in range(6):
+                result_data.append(float('inf'))
+                result_data.append(float('inf'))
+            return result_data
 
        
     def parse_data(self, data):

@@ -13,7 +13,9 @@ import csv
 class Net(nn.Module):
     def __init__(self, model):
         super(Net, self).__init__()
-        if model == 1:
+        self.model = model
+        model = model % 2
+        if model == 0:
             self.conv1 = nn.Conv2d(2, 32, 4, 1) #input is 27 * 8 * 2
             self.conv2 = nn.Conv2d(32, 64, 4, 1) # input is 24 * 5 * 32
             self.dropout1 = nn.Dropout(0.25)
@@ -22,7 +24,7 @@ class Net(nn.Module):
             self.batch2 = nn.BatchNorm2d(64)
             self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
             self.fc2 = nn.Linear(256, 12)
-        elif model == 2:
+        elif model == 1:
             self.conv1 = nn.Conv2d(2, 64, 4, 1) #input is 27 * 8 * 2
             self.conv2 = nn.Conv2d(64, 128, 4, 1) # input is 24 * 5 * 32
             self.dropout1 = nn.Dropout(0.25)
@@ -34,20 +36,39 @@ class Net(nn.Module):
 
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.batch1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = self.batch2(x)
-        x = F.relu(x)
-        #x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        #output = F.log_softmax(x, dim=1)
+        model = int(self.model/2)
+
+        if model == 0:
+            x = self.conv1(x)
+            x = self.batch1(x)
+            x = F.relu(x)
+            x = self.conv2(x)
+            x = self.batch2(x)
+            x = F.relu(x)
+            #x = F.max_pool2d(x, 2)
+            x = self.dropout1(x)
+            x = torch.flatten(x, 1)
+            x = self.fc1(x)
+            x = F.relu(x)
+            x = self.dropout2(x)
+            x = self.fc2(x)
+            #output = F.log_softmax(x, dim=1)
+        elif model == 1:
+            x = self.conv1(x)
+            x = self.batch1(x)
+            x = F.leaky_relu(x)
+            x = self.conv2(x)
+            x = self.batch2(x)
+            x = F.leaky_relu(x)
+            #x = F.max_pool2d(x, 2)
+            x = self.dropout1(x)
+            x = torch.flatten(x, 1)
+            x = self.fc1(x)
+            x = F.leaky_relu(x)
+            x = self.dropout2(x)
+            x = self.fc2(x)
+            #output = F.log_softmax(x, dim=1)
+
         return x
 
 
@@ -75,18 +96,14 @@ def get_loss(output, target):
     unable_c = 0
 
     for i, sum_data in enumerate(sum_list):
-        if sum_data == 0.0:
-            unable_c += 1
-            continue
-        
-        while np.isinf(sum_list[i]):
+       while np.isinf(sum_list[i]):
             unable_c += 1
             del sum_list[i]
 
             if len(sum_list) <= i:
                 break
 
-    sum_e = (np.sum(sum_list)/(len(output) - unable_c))/6
+    sum_e = np.sum(sum_list)/(len(output) - unable_c)
 
     return sum_e, unable_c
 
@@ -112,7 +129,7 @@ def test(model, device, train_loader, test_loader):
 
             tmp_loss, temp = get_loss(output, target)
             test_loss += tmp_loss
-
+            
             tmp_loss, temp = get_loss(heur, target)
             test_heur_loss += tmp_loss
             test_unable_heur += temp

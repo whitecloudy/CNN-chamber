@@ -23,6 +23,10 @@ def init_args():
                         help='quickly check a single pass')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
+    parser.add_argument('--data_div', type=int, default=5, metavar='S',
+                        help='how many dataset for divide (default: 5)')
+    parser.add_argument('--val_data_num', type=int, default=0, metavar='S',
+                        help='which dataset will be choose as Validation data (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--gpunum', type=int, default=0,
@@ -38,4 +42,11 @@ def init_args():
 
     global args
     args = parser.parse_args()
+
+    import sys
+
+    if args.val_data_num >= args.data_div:
+        print("Bigger val_data_num than data_div", file=sys.stderr)
+        sys.exit()
+
     print(args)

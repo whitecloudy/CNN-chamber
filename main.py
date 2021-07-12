@@ -1,6 +1,5 @@
 from __future__ import print_function
 import ArgsHandler
-from ArgsHandler import handle_args, test_args
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -69,27 +68,6 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 break
 
 def get_loss(output, target):
-    """
-    sum_e = 0.0
-
-    for i, output_data in enumerate(output):
-        target_data = target[i]
-
-        output_c = []
-        target_c = []
-
-        for c in range(0, len(output_data), 2):
-            target_complex = complex(target_data[c], target_data[c+1])
-            output_complex = complex(output_data[c], output_data[c+1])
-
-            output_c.append(output_complex)
-            target_c.append(target_complex)
-
-        output_data = np.array(output_c)
-        target_data = np.array(target_c)
-
-        sum_e += (abs(np.dot(output_data, target_data)))/(np.linalg.norm(output_data) * np.linalg.norm(target_data))
-    """
     sum_list = torch.sum(torch.pow(output - target, 2), 1).tolist()
     #target = torch.sum(torch.pow(target, 2), 1)
 
@@ -108,17 +86,7 @@ def get_loss(output, target):
             if len(sum_list) <= i:
                 break
 
-    sum_e = np.sum(sum_list)/(len(output) - unable_c)
-
-
-        # TODO : This should be removed
-        # TODO : loss calculation must be improved
-        # print(output_data[0], ", ", target_data[0])
-        # print(diff_data)
-        # print((diff_data ** 2).sum())
-        # print((output_data ** 2).sum())
-        # print((target_data ** 2).sum())
-        # print()
+    sum_e = (np.sum(sum_list)/(len(output) - unable_c))/6
 
     return sum_e, unable_c
 
@@ -192,7 +160,7 @@ def test(model, device, train_loader, test_loader):
 
 
 def main():
-    handle_args()
+    ArgsHandler.init_args()
     args = ArgsHandler.args
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()

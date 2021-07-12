@@ -35,6 +35,7 @@ class dataParser:
         W_size = ArgsHandler.args.heu
 
         if W_size < 6:
+            print("hello")
             return self.y_data
 
         for d in data:

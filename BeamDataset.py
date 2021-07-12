@@ -2,6 +2,7 @@ import random
 import time
 import torch
 import numpy as np
+import ArgsHandler
 
 from torch.utils.data import Dataset
 from DataProcessor import DataProcessor, global_key_list, global_data_handler
@@ -48,7 +49,7 @@ class DatasetHandler:
         self.prepare_dataset()
 
     def prepare_dataset(self):
-        random.seed(time.time())
+        random.seed(ArgsHandler.args.seed)
         random.shuffle(self.key_trainable)
 
         training_key_length = int(len(self.key_trainable) * self.train_data_ratio)
@@ -65,11 +66,40 @@ class DatasetHandler:
                 self.key_for_training.append(key)
             """
         random.shuffle(key_position)
+        
+        data_div = ArgsHandler.args.data_div
+        val_data_num = ArgsHandler.args.val_data_num
+        
+        key_len = len(key_position)
+        key_step_len = int(key_len/data_div)
+        key_remain = int(key_len - key_step_len*data_div)
+        
+        key_range = []
 
-        key_len = int(len(key_position) * 0.8)
+        s_idx = 0
+        e_idx = key_step_len
 
-        training_pos = key_position[:key_len]
-        test_pos = key_position[key_len:]
+        if key_remain > 0:
+            e_idx += 1
+
+        for i in range(data_div):
+            key_range.append((s_idx, e_idx))
+            print(e_idx)
+            
+            s_idx = e_idx
+            e_idx = e_idx + key_step_len
+
+            if i+1 < key_remain:
+                e_idx += 1
+
+        training_pos = []
+        test_pos = []
+
+        for idx, rng in enumerate(key_range):
+            if idx == val_data_num:
+                test_pos = key_position[rng[0]: rng[1]]
+            else:
+                training_pos += key_position[rng[0]: rng[1]]
 
         for key in self.key_trainable:
             if key[0:3] in training_pos:

@@ -75,7 +75,7 @@ class DataHandler:
     def getKey(self):
         return self.data_dict.keys()
 
-    def getLabel(self, key):
+    def getCha(self, key):
         W = []
         A = []
 
@@ -96,8 +96,15 @@ class DataHandler:
         """
 
         channel = (W.getH() * W).getI() * (W.getH() * A)
+
+        return channel
+
+
+    def getLabel(self, key):
+        channel = self.getCha(key)
+
         for i, cha in enumerate(channel):
-            channel[i] = (cha/abs(cha)).conj()
+            channel[i] = (cha/abs(cha))
         
         return channel
 
@@ -106,7 +113,7 @@ class DataHandler:
         return self.data_dict[key]
 
     def evalLabel(self, key, printFlag=False):
-        H = self.getLabel(key)
+        H = self.getCha(key)
         eval_value = []
         sig_data = []
         exp_data = []

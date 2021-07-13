@@ -86,15 +86,12 @@ def data_aug3(data, label, key):
 
         for ori_idx, shuffle_data in enumerate(shuffle_data_list):
             d = data[ori_idx]
-            i = 0
-            for idx in shuffle:
+            for i, idx in enumerate(shuffle):
                 shuffle_data.phase_vec[i] = d.phase_vec[idx]
-                i += 1
 
         shuffle_label = copy.deepcopy(label)
 
-        i = 0
-        for idx in shuffle:
+        for i, idx in enumerate(shuffle):
             shuffle_label[i] = label[idx]
 
         shuffle_key = key + (shuffle,)

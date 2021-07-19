@@ -7,6 +7,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
+from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 import numpy as np
 import csv
 
@@ -52,6 +53,7 @@ class Net(nn.Module):
             x = F.relu(x)
             x = self.dropout2(x)
             x = self.fc2(x)
+            x = F.tanh(x)
             #output = F.log_softmax(x, dim=1)
         elif model == 1:
             x = self.conv1(x)
@@ -67,6 +69,7 @@ class Net(nn.Module):
             x = F.leaky_relu(x)
             x = self.dropout2(x)
             x = self.fc2(x)
+            x = F.tanh(x)
             #output = F.log_softmax(x, dim=1)
 
         return x
@@ -78,7 +81,8 @@ def train(args, model, device, train_loader, optimizer, epoch):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
-        loss = F.mse_loss(output, target)
+        #loss = F.mse_loss(output, target)
+        loss = cos_loss(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
@@ -127,6 +131,7 @@ def test(model, device, train_loader, test_loader):
 
             output = model(data)
 
+            """
             tmp_loss, temp = get_loss(output, target)
             test_loss += tmp_loss
             
@@ -135,6 +140,9 @@ def test(model, device, train_loader, test_loader):
             test_unable_heur += temp
 
             total_test += len(data)
+            """
+            test_loss += cos_loss(output, target)
+            test_heur_loss += cos_loss(heur, target)
 
             # test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
             # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -149,6 +157,10 @@ def test(model, device, train_loader, test_loader):
             heur = heur.to(device)
 
             output = model(data)
+            train_loss += cos_loss(output, target)
+            train_heur_loss += cos_loss(heur, target)
+
+            """
 
             tmp_loss, temp = get_loss(output, target)
             train_loss += tmp_loss
@@ -158,21 +170,22 @@ def test(model, device, train_loader, test_loader):
             train_unable_heur += temp
 
             total_train += len(data)
+            """
 
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
     test_heur_loss /= len(test_loader)
     train_heur_loss /= len(train_loader)
-    test_unable_heur /= total_test
-    train_unable_heur /= total_train
+    #test_unable_heur /= total_test
+    #train_unable_heur /= total_train
 
     print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
         train_loss, train_heur_loss, train_unable_heur*100))
 
     print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
-        test_loss, train_heur_loss, test_unable_heur*100))
+        test_loss, test_heur_loss, test_unable_heur*100))
 
-    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), train_unable_heur, test_heur_loss
+    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), train_unable_heur, test_unable_heur
 
 
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #for heu in {9,15,21,27}
-for model in {0,1,2,3}
+for model in {3,}
 do
   for heu in {27,}
   do

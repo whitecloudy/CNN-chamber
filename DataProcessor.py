@@ -61,9 +61,13 @@ class dataParser:
                 label_element = (H[i]/abs(H[i]))
                 norm = float(self.channel_norm[i])
                 result_data.append(label_element.real/norm)
-                result_data.append(label_element.imag/norm)
 
+            for i in range(6):
+                label_element = (H[i]/abs(H[i]))
+                norm = float(self.channel_norm[i])
+                result_data.append(label_element.imag/norm)
             return np.array(result_data)
+
         except np.linalg.LinAlgError:
             for i in range(6):
                 result_data.append(float('inf'))
@@ -103,6 +107,10 @@ class dataParser:
             label_element = complex(label[i])
             norm = float(self.channel_norm[i])
             y_data.append(label_element.real/norm)
+
+        for i in range(6):
+            label_element = complex(label[i])
+            norm = float(self.channel_norm[i])
             y_data.append(label_element.imag/norm)
 
         return np.array(y_data)

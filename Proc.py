@@ -1,11 +1,13 @@
 from multiprocessing import Process, Manager
+import sys
+import numpy as np
 
 def do_work(func, para_list, num_of_thread=8):
     if len(para_list) < num_of_thread:
         num_of_thread = len(para_list)
 
     m = Manager()
-    result_list = m.list()
+    result_queue = m.Queue()
     proc_list = []
 
     para_len = len(para_list)
@@ -18,14 +20,16 @@ def do_work(func, para_list, num_of_thread=8):
     if remain > 0:
         end_idx += 1
 
-    def worker(para_range, result_list):
+    def worker(i, para_range, result_queue):
         worker_result_list = []
         for p in para_range:
             worker_result_list.append(func(*para_list[p]))
-        result_list += worker_result_list
+        result_queue.put((i, worker_result_list))
+
+    result_list = []
 
     for i in range(num_of_thread):
-        proc_list.append(Process(target=worker, args=(range(start_idx, end_idx), result_list), daemon=True))
+        proc_list.append(Process(target=worker, args=(i, range(start_idx, end_idx), result_queue), daemon=True))
 
         start_idx = end_idx
         end_idx += step_len
@@ -35,6 +39,12 @@ def do_work(func, para_list, num_of_thread=8):
 
     for p in proc_list:
         p.start()
+
+    result_list = []
+    for i in range(num_of_thread):
+        result = result_queue.get()
+        result_list += result[1]
+        proc_list[result[0]].join()
 
     for p in proc_list:
         p.join()

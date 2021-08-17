@@ -2,6 +2,8 @@ import cmath
 import copy
 import numpy as np
 
+aug_para = (4, 4, 4)
+
 def data_augmentation(data, label, key):
     result_list = [(data, label, key)]
 
@@ -29,7 +31,7 @@ def data_augmentation(data, label, key):
 def data_aug1(data, label, key):
     result_list = [(data, label, key + (0,))]
 
-    tag_sig_divide = 4
+    tag_sig_divide = aug_para[0]
     
     for i in range(1, tag_sig_divide):
         fix_shift = cmath.rect(1, 2*cmath.pi*(i/tag_sig_divide)) 
@@ -55,7 +57,7 @@ def data_aug1(data, label, key):
 def data_aug2(data, label, key):
     result_list = [(data, label, key + (0,))]
 
-    phase_vec_divide = 4
+    phase_vec_divide = aug_para[1]
     
     for r in range(1, phase_vec_divide):
         fix_shift = cmath.rect(1, 2*cmath.pi*(r/phase_vec_divide)) 

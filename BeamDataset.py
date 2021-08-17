@@ -12,7 +12,7 @@ class BeamDataset(Dataset):
         self.data_processor = DataProcessor(multiply, key_list, normalize)
 
     def renew_data(self, multiply):
-        self.data_processor.prepare_data(multiply)
+        self.data_processor.shuffle_data()
 
     def __len__(self):
         return len(self.data_processor)
@@ -21,7 +21,7 @@ class BeamDataset(Dataset):
         return self.data_processor[idx]
 
 class DatasetHandler:
-    def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=3):
+    def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=5):
         self.key_list = global_key_list
         self.key_usable = []
         self.key_trainable = []

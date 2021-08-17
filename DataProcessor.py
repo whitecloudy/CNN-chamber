@@ -5,9 +5,10 @@ import time
 import cmath
 import copy
 import sys
+import pickle
 
 from Proc import do_work
-from DataAugmentation import data_augmentation
+from DataAugmentation import data_augmentation, aug_para
 from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
@@ -119,6 +120,7 @@ class dataParser:
 global_data_handler = DataHandler()
 global_key_list = list(global_data_handler.getKey())
 
+import gc
 
 class DataProcessor:
     def __init__(self, multiply=1, key_list=global_key_list, normalize=None):
@@ -126,6 +128,9 @@ class DataProcessor:
         self.output_list = []
         self.key_list = key_list
         self.data_label_key_list = []
+        self.index_list = []
+        self.index_len = 0
+        self.multiply = 0
         para_tuples = []
 
         # data augmentation
@@ -138,27 +143,10 @@ class DataProcessor:
 
             para_tuples.append((data, label, key))
 
-        import hashlib
-        import pickle
-        import os
+        self.data_label_key_list = self.handle_cache(para_tuples, aug_para, data_augmentation)
 
-        tuples_byte = pickle.dumps(para_tuples)
-        hash_handler = hashlib.sha3_224()
-        hash_handler.update(tuples_byte)
-        hash_filename = "cache/" + hash_handler.digest().hex()
+        gc.collect()
 
-        if os.path.isfile(hash_filename):
-            print("Cache file found")
-            with open(hash_filename, "rb") as cache_file:
-                self.data_label_key_list = pickle.load(cache_file)
-        else:
-            print("No Cache file found")
-            for result in do_work(data_augmentation, para_tuples, 32):
-                self.data_label_key_list += result
-            
-            with open(hash_filename, "wb") as cache_file:
-                pickle.dump(self.data_label_key_list, cache_file)
-        
         print("Data Augmentation Complete")
 
         # config normalize value
@@ -171,8 +159,37 @@ class DataProcessor:
         self.prepare_data(multiply)
 
 
+    def handle_cache(self, para_tuples, additional_tuples, func):
+        import hashlib
+        import os
+
+        tuples_byte = pickle.dumps(para_tuples)
+        add_byte = pickle.dumps(additional_tuples)
+        hash_handler = hashlib.sha3_224()
+        hash_handler.update(tuples_byte)
+        hash_handler.update(add_byte)
+        cache_filename = "cache/" + hash_handler.digest().hex()
+
+        rt_data = []
+
+        if os.path.isfile(cache_filename):
+            print("Cache file found")
+            with open(cache_filename, "rb") as cache_file:
+                rt_data = pickle.load(cache_file)
+        else:
+            print("No Cache file found")
+            for result in do_work(func, para_tuples, 16):
+                rt_data += result
+            
+            with open(cache_filename, "wb") as cache_file:
+                pickle.dump(rt_data, cache_file)
+        
+        return rt_data
+
+
     def prepare_data(self, multiply):
         self.output_list = []
+        self.multiply = multiply
         para_tuples = []
 
         def make_output_data(data, label, key, normalize, multiply=1):
@@ -203,11 +220,19 @@ class DataProcessor:
         for data, label, key in self.data_label_key_list:
             para_tuples.append((data, label, key, self.normalize, multiply))
 
-        for result in do_work(make_output_data, para_tuples, 32):
-            self.output_list += result
+        self.output_list = self.handle_cache(para_tuples, (self.multiply), make_output_data)
+
+        gc.collect()
 
         print("Done")
 
+        self.index_len = int(len(self.output_list)/self.multiply)
+        self.index_list = list(range(len(self.output_list)))
+        random.shuffle(self.index_list)
+
+    def shuffle_data(self):
+        print("Shuffle data")
+        random.shuffle(self.index_list)
 
     def calculate_normalize(self):
         mean_tag = 0.0
@@ -240,11 +265,15 @@ class DataProcessor:
 
         return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
 
-
     def __len__(self):
-        return len(self.output_list)
+        return self.index_len
 
     def __getitem__(self, idx):
+        if self.index_len <= idx:
+            raise IndexError
+        else:
+            idx = self.index_list[idx]
+
         return torch.FloatTensor(self.output_list[idx].x_data), torch.FloatTensor(self.output_list[idx].y_data), torch.FloatTensor(self.output_list[idx].heur_data)
 
 

@@ -9,7 +9,7 @@ do
     do
       log_filename=random_pos_$i\_$heu\_$model.csv
       echo $log_filename
-      python3 main.py --gpunum 3 --model $model --data_div 5 --val_data_num $i --batch 256 --lr 0.25 --epochs 15 --heu $heu --log $log_filename
+      python3 main.py --gpunum 1 --model $model --data_div 5 --val_data_num $i --batch 256 --lr 0.001 --epochs 30 --heu $heu --log $log_filename
     done
   done
 done

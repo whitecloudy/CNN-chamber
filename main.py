@@ -28,15 +28,24 @@ class Net(nn.Module):
         elif model == 1:
             self.conv1 = nn.Conv2d(2, 64, 4, 1) #input is 27 * 8 * 2
             self.conv2 = nn.Conv2d(64, 128, 4, 1) # input is 24 * 5 * 32
+            self.heur_fc1 = nn.Linear(12, 256)
             self.dropout1 = nn.Dropout(0.25)
             self.dropout2 = nn.Dropout(0.5)
             self.batch1 = nn.BatchNorm2d(64)
             self.batch2 = nn.BatchNorm2d(128)
-            self.fc1 = nn.Linear(21 * 2 * 128, 1024) # 21 * 2 * 64
+            self.batch3 = nn.BatchNorm1d(1024)
+            self.heur_batch = nn.BatchNorm1d(256)
+            self.fc1 = nn.Linear(21 * 2 * 128 + 256, 1024) # 21 * 2 * 64
             self.fc2 = nn.Linear(1024, 12)
 
+            torch.nn.init.xavier_uniform_(self.conv1.weight)
+            torch.nn.init.xavier_uniform_(self.conv2.weight)
+            torch.nn.init.xavier_uniform_(self.fc1.weight)
+            torch.nn.init.xavier_uniform_(self.fc2.weight)
+            torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
 
-    def forward(self, x):
+
+    def forward(self, x, x1):
         model = int(self.model/2)
 
         if model == 0:
@@ -65,11 +74,16 @@ class Net(nn.Module):
             #x = F.max_pool2d(x, 2)
             x = self.dropout1(x)
             x = torch.flatten(x, 1)
+            x1 = self.heur_fc1(x1)
+            x1 = self.heur_batch(x1)
+            x1 = F.leaky_relu(x1)
+            x = torch.cat((x, x1), 1)
             x = self.fc1(x)
+            x = self.batch3(x)
             x = F.leaky_relu(x)
             x = self.dropout2(x)
             x = self.fc2(x)
-            x = F.tanh(x)
+            x = torch.tanh(x)
             #output = F.log_softmax(x, dim=1)
 
         return x
@@ -78,9 +92,9 @@ class Net(nn.Module):
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
     for batch_idx, (data, target, heur) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
+        data, target, heur = data.to(device), target.to(device), heur.to(device)
         optimizer.zero_grad()
-        output = model(data)
+        output = model(data, heur)
         #loss = F.mse_loss(output, target)
         loss = cos_loss(output, target)
         loss.backward()
@@ -129,7 +143,7 @@ def test(model, device, train_loader, test_loader):
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
 
-            output = model(data)
+            output = model(data, heur)
 
             """
             tmp_loss, temp = get_loss(output, target)
@@ -156,7 +170,7 @@ def test(model, device, train_loader, test_loader):
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
 
-            output = model(data)
+            output = model(data, heur)
             train_loss += cos_loss(output, target)
             train_heur_loss += cos_loss(heur, target)
 
@@ -199,7 +213,7 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True, 'pin_memory': True}
+    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
     if use_cuda:
         if torch.cuda.device_count() >= (args.gpunum-1):
@@ -234,9 +248,12 @@ def main():
     
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-
     model = Net(args.model).to(device)
-    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+    # print("Model parameters")
+    # for i in model.parameters():
+    #     print(i)
+    #optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 

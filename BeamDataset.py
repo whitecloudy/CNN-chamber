@@ -5,14 +5,18 @@ import numpy as np
 import ArgsHandler
 
 from torch.utils.data import Dataset
-from DataProcessor import DataProcessor, global_key_list, global_data_handler
+from DataProcessor import DataProcessor, global_key_list, global_data_handler, calculate_MMSE_parameter
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, key_list, normalize=None):
         self.data_processor = DataProcessor(multiply, key_list, normalize)
+        self.MMSE_para = calculate_MMSE_parameter(self.data_processor)
 
     def renew_data(self, multiply):
         self.data_processor.shuffle_data()
+
+    def getMMSEparaa(self):
+        return self.MMSE_para
 
     def __len__(self):
         return len(self.data_processor)

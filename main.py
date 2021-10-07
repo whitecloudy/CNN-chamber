@@ -26,16 +26,16 @@ class Net(nn.Module):
             self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
             self.fc2 = nn.Linear(256, 12)
         elif model == 1:
-            self.conv1 = nn.Conv2d(2, 64, 4, 1) #input is 27 * 8 * 2
-            self.conv2 = nn.Conv2d(64, 128, 4, 1) # input is 24 * 5 * 32
+            self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
+            self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
             self.heur_fc1 = nn.Linear(12, 256)
             self.dropout1 = nn.Dropout(0.25)
             self.dropout2 = nn.Dropout(0.5)
             self.batch1 = nn.BatchNorm2d(64)
-            self.batch2 = nn.BatchNorm2d(128)
+            self.batch2 = nn.BatchNorm2d(64)
             self.batch3 = nn.BatchNorm1d(1024)
             self.heur_batch = nn.BatchNorm1d(256)
-            self.fc1 = nn.Linear(21 * 2 * 128 + 256, 1024) # 21 * 2 * 64
+            self.fc1 = nn.Linear(7 * 3 * 64 + 256, 1024) # 21 * 2 * 64
             self.fc2 = nn.Linear(1024, 12)
 
             torch.nn.init.xavier_uniform_(self.conv1.weight)
@@ -65,6 +65,8 @@ class Net(nn.Module):
             x = F.tanh(x)
             #output = F.log_softmax(x, dim=1)
         elif model == 1:
+            x = torch.tensor_split(x, (7, ), dim=3)
+            x = x[0]
             x = self.conv1(x)
             x = self.batch1(x)
             x = F.leaky_relu(x)
@@ -83,7 +85,7 @@ class Net(nn.Module):
             x = F.leaky_relu(x)
             x = self.dropout2(x)
             x = self.fc2(x)
-            x = torch.tanh(x)
+            #x = torch.tanh(x)
             #output = F.log_softmax(x, dim=1)
 
         return x
@@ -91,12 +93,17 @@ class Net(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
+    l = torch.nn.MSELoss(reduction='mean')
     for batch_idx, (data, target, heur) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
         optimizer.zero_grad()
         output = model(data, heur)
-        #loss = F.mse_loss(output, target)
-        loss = cos_loss(output, target)
+        loss = l(output, target)
+            
+        #loss = cos_loss(output, target)
+        if torch.isnan(loss).any() or torch.isinf(loss).any():
+            assert False, "Nan is detected"
+
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
@@ -105,25 +112,6 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 100. * batch_idx / len(train_loader), loss.item()))
             if args.dry_run:
                 break
-
-def get_loss(output, target):
-    sum_list = torch.sum(torch.pow(output - target, 2), 1).tolist()
-    #target = torch.sum(torch.pow(target, 2), 1)
-
-    #sum_list = torch.div(diff, target).tolist()
-    unable_c = 0
-
-    for i, sum_data in enumerate(sum_list):
-       while np.isinf(sum_list[i]):
-            unable_c += 1
-            del sum_list[i]
-
-            if len(sum_list) <= i:
-                break
-
-    sum_e = np.sum(sum_list)/(len(output) - unable_c)
-
-    return sum_e, unable_c
 
 
 def test(model, device, train_loader, test_loader):
@@ -135,9 +123,6 @@ def test(model, device, train_loader, test_loader):
     test_unable_heur = 0
     train_unable_heur = 0
 
-    total_train = 0
-    total_test = 0
-
     with torch.no_grad():
         for data, target, heur in test_loader:
             data, target = data.to(device), target.to(device)
@@ -145,16 +130,6 @@ def test(model, device, train_loader, test_loader):
 
             output = model(data, heur)
 
-            """
-            tmp_loss, temp = get_loss(output, target)
-            test_loss += tmp_loss
-            
-            tmp_loss, temp = get_loss(heur, target)
-            test_heur_loss += tmp_loss
-            test_unable_heur += temp
-
-            total_test += len(data)
-            """
             test_loss += cos_loss(output, target)
             test_heur_loss += cos_loss(heur, target)
 
@@ -174,24 +149,10 @@ def test(model, device, train_loader, test_loader):
             train_loss += cos_loss(output, target)
             train_heur_loss += cos_loss(heur, target)
 
-            """
-
-            tmp_loss, temp = get_loss(output, target)
-            train_loss += tmp_loss
-
-            tmp_loss, temp = get_loss(heur, target)
-            train_heur_loss += tmp_loss
-            train_unable_heur += temp
-
-            total_train += len(data)
-            """
-
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
     test_heur_loss /= len(test_loader)
     train_heur_loss /= len(train_loader)
-    #test_unable_heur /= total_test
-    #train_unable_heur /= total_train
 
     print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
         train_loss, train_heur_loss, train_unable_heur*100))
@@ -229,16 +190,6 @@ def main():
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    """
-    transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-        ])
-    """
-    #dataset1 = datasets.MNIST('../data', train=True, download=True,
-    #                      transform=transform)
-    #dataset2 = datasets.MNIST('../data', train=False,
-    #                   transform=transform)
     dataset_handler = DatasetHandler()
 
     training_dataset = dataset_handler.training_dataset
@@ -249,10 +200,6 @@ def main():
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
     model = Net(args.model).to(device)
-    # print("Model parameters")
-    # for i in model.parameters():
-    #     print(i)
-    #optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)

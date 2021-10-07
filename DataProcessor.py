@@ -13,7 +13,7 @@ from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
 
-SIZE_OF_DATA = 27
+SIZE_OF_DATA = 11
 
 
 class dataParser:
@@ -28,8 +28,7 @@ class dataParser:
         self.heur_data = self.cal_heuristic(data)
         self.key = key
 
-
-    def cal_heuristic(self, data):
+    def cal_ls_estimator(self, data):
         W = []
         A = []
 
@@ -49,32 +48,38 @@ class dataParser:
         W = np.matrix(W)
         A = np.matrix(A)
 
-        try:
-            WHW = (W.getH() * W)
+        if np.linalg.matrix_rank(W) < 6:
+            raise NameError("Not enough rank")
 
-            W_inv = WHW.getI() * W.getH()
-            H = (W_inv * A)
-            H = H.getT().getA()[0]
+        WHW = (W.getH() * W)
 
-            result_data = []
+        W_inv = WHW.getI() * W.getH()
+        H = (W_inv * A)
+        H = H.getT().getA()[0]
 
-            for i in range(6):
-                label_element = (H[i]/abs(H[i]))
-                norm = float(self.channel_norm[i])
-                result_data.append(label_element.real/norm)
+        return H
 
-            for i in range(6):
-                label_element = (H[i]/abs(H[i]))
-                norm = float(self.channel_norm[i])
-                result_data.append(label_element.imag/norm)
-            return np.array(result_data)
 
-        except np.linalg.LinAlgError:
-            for i in range(6):
-                result_data.append(float('inf'))
-                result_data.append(float('inf'))
-            return result_data
+    def cal_heuristic(self, data):
+        H = self.cal_ls_estimator(data)
 
+        result_data = []
+
+        for i in range(6):
+            label_element = (H[i])#/abs(H[i]))
+            if cmath.isinf(label_element) or cmath.isnan(label_element):
+                raise NameError("Inf or Nan for Heur")
+            norm = float(self.channel_norm[i])
+            result_data.append(label_element.real/norm)
+
+        for i in range(6):
+            label_element = (H[i])#/abs(H[i]))
+            if cmath.isinf(label_element) or cmath.isnan(label_element):
+                raise NameError("Inf or Nan for Heur")
+            norm = float(self.channel_norm[i])
+            result_data.append(label_element.imag/norm)
+        return np.array(result_data)
+        
        
     def parse_data(self, data):
         real_list = []
@@ -90,7 +95,7 @@ class dataParser:
 
             real.append(data[i].tag_sig.real/self.tag_norm)
             imag.append(data[i].tag_sig.imag/self.tag_norm)
-
+    
             real.append(data[i].noise_std.real/self.noise_norm)
             imag.append(data[i].noise_std.imag/self.noise_norm)
 
@@ -168,9 +173,13 @@ class DataProcessor:
         hash_handler = hashlib.sha3_224()
         hash_handler.update(tuples_byte)
         hash_handler.update(add_byte)
-        cache_filename = "cache/" + hash_handler.digest().hex()
+
+        from pathlib import Path
+
+        cache_filename = str(Path.home()) + "/cache/" + hash_handler.digest().hex()
 
         rt_data = []
+        print(cache_filename)
 
         if os.path.isfile(cache_filename):
             print("Cache file found")
@@ -205,22 +214,41 @@ class DataProcessor:
                 for i in range(0, len(data) - SIZE_OF_DATA + 1, SIZE_OF_DATA):
                     data_to_parse = data[i:i+SIZE_OF_DATA]
 
-                    prepared_data_list.append(dataParser(data_to_parse, label, key, normalize))
-
                     last_idx = i
+
+                    parsedData = None
+
+                    try:
+                        parsedData = dataParser(data_to_parse, label, key, normalize)
+                    except np.linalg.LinAlgError:
+                        print("one go")
+                        continue
+                    except NameError:
+                        continue
+
+                    prepared_data_list.append(parsedData)
 
                 # handle last remaining data
                 if last_idx < len(data) - SIZE_OF_DATA:
                     data_to_parse = data[len(data) - SIZE_OF_DATA:len(data)]
 
-                    prepared_data_list.append(dataParser(data_to_parse, label, key, normalize))
+                    parsedData = None
 
+                    try:
+                        parsedData = dataParser(data_to_parse, label, key, normalize)
+                    except np.linalg.LinAlgError:
+                        print("two go")
+                        break
+                    except NameError:
+                        break
+
+                    prepared_data_list.append(parsedData)
             return prepared_data_list
 
         for data, label, key in self.data_label_key_list:
             para_tuples.append((data, label, key, self.normalize, multiply))
 
-        self.output_list = self.handle_cache(para_tuples, (self.multiply), make_output_data)
+        self.output_list = self.handle_cache(para_tuples, (self.multiply, SIZE_OF_DATA), make_output_data)
 
         gc.collect()
 
@@ -277,14 +305,47 @@ class DataProcessor:
         return torch.FloatTensor(self.output_list[idx].x_data), torch.FloatTensor(self.output_list[idx].y_data), torch.FloatTensor(self.output_list[idx].heur_data)
 
 
+def calculate_MMSE_parameter(datas):
+    H_Y_pair = []
+    Y_avg_sum = 0
+    H_avg_sum = 0
+    for data in datas.output_list:
+        Y = data.cal_ls_estimator(data.x_origin)
+        H = data.y_origin.reshape(6)
+
+        H_Y_pair.append((H, Y))
+
+        Y_avg_sum += Y
+
+        H_avg_sum += H
+
+    N = len(datas.output_list)
+
+    mu_y = Y_avg_sum / N
+    mu_h = H_avg_sum / N
+    r_hh = 0
+    r_yy = 0
+
+    for h, y in H_Y_pair:
+        h_hat = h - mu_h
+        y_hat = y - mu_y
+        r_hh += (np.matrix(h_hat).H * np.matrix(h_hat))
+        r_yy += (np.matrix(y_hat).H * np.matrix(y_hat))
+
+    r_hh /= len(H_Y_pair)
+    r_yy /= len(H_Y_pair)
+
+    r_yy_inv = r_yy.getI()
+
+    return r_hh * r_yy_inv
+
+
 def main():
-    d = DataProcessor(multiply=4)
+    datas = DataProcessor(multiply=1)
+    
 
     # for x, y in d:
         #print(y.shape)
-
-    print(len(d))
-    print(d[0])
 
     #print(d.normalize)
 

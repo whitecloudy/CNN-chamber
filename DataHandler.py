@@ -102,9 +102,11 @@ class DataHandler:
 
     def getLabel(self, key):
         channel = self.getCha(key)
-
+        
+        """
         for i, cha in enumerate(channel):
             channel[i] = (cha/abs(cha))
+        """
         
         return channel
 
@@ -150,36 +152,11 @@ class DataHandler:
 
 def main():
     data = DataHandler()
-    logfile = open("Channel.csv", "w")
-    logCSV = csv.writer(logfile)
-    logCSV.writerow(["filename", "position", "range", "count", "ant1 r", "ant1 i", "ant2 r", "ant2 i", "ant3 r", "ant3 i", "ant4 r", "ant4 i", "ant5 r", "ant5 i", "ant6 r", "ant6 i", "error", "num of data"])
 
-    
     for d, l, k in data:
-        v, length = data.evalLabel(k)
-        noise_real = []
-        noise_imag = []
-        for d_t in d:
-            noise_real.append(d_t.noise_std.real)
-            noise_imag.append(d_t.noise_std.imag)
+        for amp in abs(l):
+            print(float(amp), ",", len(d))
 
-        if length >= 100 and v < 0.15 and k[3] != ' directionalrefine':
-            logCSV.writerow([i for i in k[0:3]] + 
-                    [k[4]] + 
-                    np.array([[c.real, c.imag] for c in np.array(data.getCha(k)).flatten().tolist()]).flatten().tolist() +
-                    [v, length] + 
-                    [np.average(noise_real), np.std(noise_real), np.average(noise_imag), np.std(noise_imag)])
-            print(k, data.getCha(k), v, length)
-            print()
-    logfile.close()
-            
-
-    """
-    for i in d.data_dict.keys():
-        print(i, len(d.data_dict[i]))
-        d.evalLabel(i, True)
-        print()
-    """
 
 if __name__ == "__main__":
     main()

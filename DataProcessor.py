@@ -66,18 +66,17 @@ class dataParser:
         result_data = []
 
         for i in range(6):
-            label_element = (H[i])#/abs(H[i]))
+            label_element = (H[i])
             if cmath.isinf(label_element) or cmath.isnan(label_element):
                 raise NameError("Inf or Nan for Heur")
-            norm = float(self.channel_norm[i])
-            result_data.append(label_element.real/norm)
+            result_data.append(label_element.real)
 
         for i in range(6):
-            label_element = (H[i])#/abs(H[i]))
+            label_element = (H[i])
             if cmath.isinf(label_element) or cmath.isnan(label_element):
                 raise NameError("Inf or Nan for Heur")
-            norm = float(self.channel_norm[i])
-            result_data.append(label_element.imag/norm)
+            result_data.append(label_element.imag)
+
         return np.array(result_data)
         
        
@@ -93,11 +92,11 @@ class dataParser:
                 real.append(phase.real)
                 imag.append(phase.imag)
 
-            real.append(data[i].tag_sig.real/self.tag_norm)
-            imag.append(data[i].tag_sig.imag/self.tag_norm)
+            real.append(data[i].tag_sig.real)
+            imag.append(data[i].tag_sig.imag)
     
-            real.append(data[i].noise_std.real/self.noise_norm)
-            imag.append(data[i].noise_std.imag/self.noise_norm)
+            real.append(data[i].noise_std.real)
+            imag.append(data[i].noise_std.imag)
 
             real_list.append(real)
             imag_list.append(imag)
@@ -111,13 +110,11 @@ class dataParser:
 
         for i in range(6):
             label_element = complex(label[i])
-            norm = float(self.channel_norm[i])
-            y_data.append(label_element.real/norm)
+            y_data.append(label_element.real)
 
         for i in range(6):
             label_element = complex(label[i])
-            norm = float(self.channel_norm[i])
-            y_data.append(label_element.imag/norm)
+            y_data.append(label_element.imag)
 
         return np.array(y_data)
 
@@ -342,7 +339,6 @@ def calculate_MMSE_parameter(datas):
 
 def main():
     datas = DataProcessor(multiply=1)
-    
 
     # for x, y in d:
         #print(y.shape)

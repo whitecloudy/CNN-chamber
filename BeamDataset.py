@@ -10,12 +10,30 @@ from DataProcessor import DataProcessor, global_key_list, global_data_handler, c
 class BeamDataset(Dataset):
     def __init__(self, multiply, key_list, normalize=None):
         self.data_processor = DataProcessor(multiply, key_list, normalize)
-        self.MMSE_para = calculate_MMSE_parameter(self.data_processor)
+        self.MMSE_para = torch.tensor(calculate_MMSE_parameter(self.data_processor), dtype=torch.complex64)
 
     def renew_data(self, multiply):
         self.data_processor.shuffle_data()
 
-    def getMMSEparaa(self):
+    def getNormPara(self):
+        norm_tuple = self.data_processor.normalize
+        x_norm_vector = []
+        y_norm_vector = []
+
+        x_norm_vector = [1. for i in range(6)]
+        x_norm_vector.append(1/float(norm_tuple[0]))
+        x_norm_vector.append(1/float(norm_tuple[1]))
+        
+        for n in norm_tuple[2]:
+            y_norm_vector.append(1/float(n))
+
+        for n in norm_tuple[2]:
+            y_norm_vector.append(1/float(n))
+
+        return torch.FloatTensor(x_norm_vector), torch.FloatTensor(y_norm_vector)
+
+
+    def getMMSEpara(self):
         return self.MMSE_para
 
     def __len__(self):

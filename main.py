@@ -8,6 +8,7 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
+from Cosine_sim_loss import make_complex
 import numpy as np
 import csv
 
@@ -91,11 +92,16 @@ class Net(nn.Module):
         return x
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm):
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
     for batch_idx, (data, target, heur) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
+
+        data *= x_norm
+        target *= y_norm
+        heur *= y_norm
+
         optimizer.zero_grad()
         output = model(data, heur)
         loss = l(output, target)
@@ -114,12 +120,14 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 break
 
 
-def test(model, device, train_loader, test_loader):
+def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
     model.eval()
     test_loss = 0
     train_loss = 0
     test_heur_loss = 0
     train_heur_loss = 0
+    test_mmse_loss = 0
+    train_mmse_loss = 0
     test_unable_heur = 0
     train_unable_heur = 0
 
@@ -127,38 +135,58 @@ def test(model, device, train_loader, test_loader):
         for data, target, heur in test_loader:
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
+            
+            data *= x_norm
+            target *= y_norm
+            heur *= y_norm
 
             output = model(data, heur)
 
+            output /= y_norm
+            target /= y_norm
+            heur /= y_norm
+
+            mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
+            mmse = torch.flatten(torch.view_as_real(mmse), start_dim=1)
+
             test_loss += cos_loss(output, target)
             test_heur_loss += cos_loss(heur, target)
-
-            # test_loss += F.mse_loss(output, target, reduction='mean').item()  # sum up batch loss
-            # pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-            # print(target)
-            # print(len(pred))
-            # print(target.view_as(pred))
-            # correct += pred.eq(target.view_as(pred)).sum().item()
+            test_mmse_loss += cos_loss(mmse, target)
 
     with torch.no_grad():
         for data, target, heur in train_loader:
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
 
+            data *= x_norm
+            target *= y_norm
+            heur *= y_norm
+
             output = model(data, heur)
+
+            output /= y_norm
+            target /= y_norm
+            heur /= y_norm
+
+            mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
+            mmse = torch.flatten(torch.view_as_real(mmse), start_dim=1)
+
             train_loss += cos_loss(output, target)
             train_heur_loss += cos_loss(heur, target)
+            train_mmse_loss += cos_loss(mmse, target)
 
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
     test_heur_loss /= len(test_loader)
     train_heur_loss /= len(train_loader)
+    test_mmse_loss /= len(test_loader)
+    train_mmse_loss /= len(train_loader)
 
-    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
-        train_loss, train_heur_loss, train_unable_heur*100))
+    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
+        train_loss, train_heur_loss, train_mmse_loss, train_unable_heur*100))
 
-    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
-        test_loss, test_heur_loss, test_unable_heur*100))
+    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
+        test_loss, test_heur_loss, test_mmse_loss, test_unable_heur*100))
 
     return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), train_unable_heur, test_unable_heur
 
@@ -202,6 +230,12 @@ def main():
     model = Net(args.model).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    x_norm_vector, y_norm_vector = training_dataset.getNormPara()
+    x_norm_vector = x_norm_vector.to(device)
+    y_norm_vector = y_norm_vector.to(device)
+
+    mmse_para = training_dataset.getMMSEpara().to(device)
+
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
     if args.log != None:
@@ -212,10 +246,9 @@ def main():
         logfile = None
         logCSV = None
 
-
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        train_loss, test_loss, train_heur_loss, test_heur_loss, train_unable, test_unable = test(model, device, train_loader, test_loader)
+        train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector)
+        train_loss, test_loss, train_heur_loss, test_heur_loss, train_unable, test_unable = test(model, device, train_loader, test_loader, x_norm_vector, y_norm_vector, mmse_para)
         scheduler.step()
 
         if logCSV is not None:

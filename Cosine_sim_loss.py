@@ -25,8 +25,8 @@ def complex_cosine_sim_loss(x1, x2):
     return 1 - abs(torch.mean(cos_sim))
 
 if __name__=="__main__":
-    x1 = torch.randn(6,12)
-    x2 = torch.randn(6,12)
+    x1 = torch.randn(6, 12)
+    x2 = torch.randn(6, 12)
 
     print(complex_cosine_sim_loss(x1, x2))
     print(complex_cosine_sim_loss(x1, 5*x2))

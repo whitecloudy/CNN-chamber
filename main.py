@@ -147,7 +147,7 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
             heur /= y_norm
 
             mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
-            mmse = torch.flatten(torch.view_as_real(mmse), start_dim=1)
+            mmse = torch.cat((mmse.real, mmse.imag), 1)
 
             test_loss += cos_loss(output, target)
             test_heur_loss += cos_loss(heur, target)
@@ -169,7 +169,7 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
             heur /= y_norm
 
             mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
-            mmse = torch.flatten(torch.view_as_real(mmse), start_dim=1)
+            mmse = torch.cat((mmse.real, mmse.imag), 1)
 
             train_loss += cos_loss(output, target)
             train_heur_loss += cos_loss(heur, target)

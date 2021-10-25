@@ -13,7 +13,7 @@ from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
 
-SIZE_OF_DATA = 11
+SIZE_OF_DATA = 6
 
 
 class dataParser:
@@ -245,7 +245,7 @@ class DataProcessor:
         for data, label, key in self.data_label_key_list:
             para_tuples.append((data, label, key, self.normalize, multiply))
 
-        self.output_list = self.handle_cache(para_tuples, (self.multiply, SIZE_OF_DATA), make_output_data)
+        self.output_list = self.handle_cache(para_tuples, (self.multiply, SIZE_OF_DATA, "Nor"), make_output_data)
 
         gc.collect()
 
@@ -320,21 +320,21 @@ def calculate_MMSE_parameter(datas):
 
     mu_y = Y_avg_sum / N
     mu_h = H_avg_sum / N
-    r_hh = 0
+    r_hy = 0
     r_yy = 0
 
     for h, y in H_Y_pair:
         h_hat = h - mu_h
         y_hat = y - mu_y
-        r_hh += (np.matrix(h_hat).H * np.matrix(h_hat))
-        r_yy += (np.matrix(y_hat).H * np.matrix(y_hat))
+        r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
+        r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
 
-    r_hh /= len(H_Y_pair)
+    r_hy /= len(H_Y_pair)
     r_yy /= len(H_Y_pair)
 
     r_yy_inv = r_yy.getI()
 
-    return r_hh * r_yy_inv
+    return r_hy * r_yy_inv
 
 
 def main():

@@ -1,6 +1,7 @@
 import cmath
 import copy
 import numpy as np
+from DataHandler import dataParser
 
 aug_para = (4, 4, 4)
 
@@ -38,16 +39,16 @@ def data_aug1(data, label, key):
         random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()*tag_sig_divide))
 
         shift_val = fix_shift * random_shift
-        shift_data_list = copy.deepcopy(data)
-
-        for shift_data in shift_data_list:
-            shift_data.tag_sig *= shift_val
-            shift_data.noise_std *= shift_val
-            shift_data.noise_std = complex(abs(shift_data.noise_std.real), abs(shift_data.noise_std.imag))
-
-        shift_label = label * shift_val
 
         shift_key = key + (i,)
+        shift_label = label * shift_val
+        shift_data_list = []#copy.deepcopy(data)
+
+        for d in data:
+            shift_tag_sig = d.tag_sig * shift_val
+            shift_noise_std = d.noise_std * shift_val
+            shift_noise_std = complex(abs(shift_noise_std.real), abs(shift_noise_std.imag))
+            shift_data_list.append(dataParser(d.phase_vec, shift_key, d.round_num, shift_noise_std, shift_tag_sig))
 
         result_list.append((shift_data_list, shift_label, shift_key))
 
@@ -65,14 +66,13 @@ def data_aug2(data, label, key):
 
         shift_val = fix_shift * random_shift
 
-        shift_data_list = copy.deepcopy(data)
-
-        for shift_data in shift_data_list:
-            shift_data.phase_vec *= shift_val
-
         shift_label = label * shift_val.conjugate()
-
         shift_key = key + (r,)
+        shift_data_list = []#copy.deepcopy(data)
+
+        for d in data:
+            shift_phase_vec = d.phase_vec * shift_val
+            shift_data_list.append(dataParser(shift_phase_vec, shift_key, d.round_num, d.noise_std, d.tag_sig))
 
         result_list.append((shift_data_list, shift_label, shift_key))
 
@@ -84,19 +84,13 @@ def data_aug3(data, label, key):
     shuffle_candidate = [[2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]]
 
     for shuffle in shuffle_candidate:
-        shuffle_data_list = copy.deepcopy(data)
-
-        for ori_idx, shuffle_data in enumerate(shuffle_data_list):
-            d = data[ori_idx]
-            for i, idx in enumerate(shuffle):
-                shuffle_data.phase_vec[i] = d.phase_vec[idx]
-
-        shuffle_label = copy.deepcopy(label)
-
-        for i, idx in enumerate(shuffle):
-            shuffle_label[i] = label[idx]
-
+        shuffle_label = [label[shuffle[i]] for i in range(6)]
         shuffle_key = key + (shuffle,)
+        shuffle_data_list = [] #copy.deepcopy(data)
+
+        for d in enumerate(data):
+            shuffle_phase_vec = [d[shuffle[i]] for i in range(6)]
+            shuffle_data_list.append(dataParser(shuffle_phase_vec, shuffle_key, d.round_num, d.noise_std, d.tag_sig))
 
         result_list.append((shuffle_data_list, shuffle_label, shuffle_key))
 

@@ -16,6 +16,8 @@ class dataParser:
         self.round_num = round_num
         self.noise_std = noise_std
         self.tag_sig = tag_sig
+        self.x_row = np.append(np.append(self.phase_vec, self.tag_sig), self.noise_std)
+        
 
     @classmethod
     def from_row_filename(cls, row, filename):

@@ -16,8 +16,6 @@ import ArgsHandler
 
 class dataParser:
     def __init__(self, data, label, key):
-        self.x_origin = data
-        self.y_origin = label
         self.x_data = self.parse_data(data)
         self.y_data = self.parse_label(label)
         self.heur_data = self.cal_heuristic(data)
@@ -155,10 +153,13 @@ class DataProcessor:
             last_idx = 0
             
             for count in range(multiply):
-                random.shuffle(data)
+                idx = list(range(len(data)))
+                random.shuffle(idx)
 
                 for i in range(0, len(data) - row_size + 1, row_size):
-                    data_to_parse = data[i:i+row_size]
+                    data_to_parse = []
+                    for j in range(i, i+row_size):
+                        data_to_parse.append(data[idx[j]])
 
                     last_idx = i
 
@@ -176,7 +177,11 @@ class DataProcessor:
 
                 # handle last remaining data
                 if last_idx < len(data) - row_size:
-                    data_to_parse = data[len(data) - row_size:len(data)]
+                    data_to_parse = []
+                    for j in range(len(data) - row_size, len(data)):
+                        data_to_parse.append(data[idx[j]])
+
+                    #data_to_parse = data[len(data) - row_size:len(data)]
 
                     parsedData = None
 

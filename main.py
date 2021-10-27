@@ -11,6 +11,7 @@ from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
 import numpy as np
 import csv
+import copy
 
 class Net(nn.Module):
     def __init__(self, model):
@@ -128,6 +129,14 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
     train_heur_loss = 0
     test_mmse_loss = 0
     train_mmse_loss = 0
+
+    test_cos_loss = 0
+    train_cos_loss = 0
+    test_heur_cos_loss = 0
+    train_heur_cos_loss = 0
+    test_mmse_cos_loss = 0
+    train_mmse_cos_loss = 0
+
     test_unable_heur = 0
     train_unable_heur = 0
 
@@ -156,9 +165,9 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
             test_heur_loss += l(heur, target)
             test_mmse_loss += l(mmse, target)
 
-            # test_loss += cos_loss(output, target)
-            # test_heur_loss += cos_loss(heur, target)
-            # test_mmse_loss += cos_loss(mmse, target)
+            test_cos_loss += cos_loss(output, target)
+            test_heur_cos_loss += cos_loss(heur, target)
+            test_mmse_cos_loss += cos_loss(mmse, target)
 
     with torch.no_grad():
         for data, target, heur in train_loader:
@@ -182,9 +191,9 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
             train_heur_loss += l(heur, target)
             train_mmse_loss += l(mmse, target)
 
-            # train_loss += cos_loss(output, target)
-            # train_heur_loss += cos_loss(heur, target)
-            # train_mmse_loss += cos_loss(mmse, target)
+            train_cos_loss += cos_loss(output, target)
+            train_heur_cos_loss += cos_loss(heur, target)
+            train_mmse_cos_loss += cos_loss(mmse, target)
 
     test_loss /= len(test_loader)
     train_loss /= len(train_loader)
@@ -193,14 +202,20 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
     test_mmse_loss /= len(test_loader)
     train_mmse_loss /= len(train_loader)
 
+    test_cos_loss /= len(test_loader)
+    train_cos_loss /= len(train_loader)
+    test_heur_cos_loss /= len(test_loader)
+    train_heur_cos_loss /= len(train_loader)
+    test_mmse_cos_loss /= len(test_loader)
+    train_mmse_cos_loss /= len(train_loader)
+
     print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
         train_loss, train_heur_loss, train_mmse_loss, train_unable_heur*100))
 
     print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
         test_loss, test_heur_loss, test_mmse_loss, test_unable_heur*100))
 
-    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), float(train_mmse_loss), float(test_mmse_loss), train_unable_heur, test_unable_heur
-
+    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), float(train_mmse_loss), float(test_mmse_loss), float(train_cos_loss), float(test_cos_loss), float(train_heur_cos_loss), float(test_heur_cos_loss), float(train_mmse_cos_loss), float(test_mmse_cos_loss), train_unable_heur, test_unable_heur
 
 
 def main():
@@ -256,17 +271,24 @@ def main():
     else:
         logfile = None
         logCSV = None
+    
+    min_loss = float('inf')
+    opt_model_para = None
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector)
-        train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_unable, test_unable = test(model, device, train_loader, test_loader, x_norm_vector, y_norm_vector, mmse_para)
+        train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable = test(model, device, train_loader, test_loader, x_norm_vector, y_norm_vector, mmse_para)
         scheduler.step()
 
         if logCSV is not None:
-            logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_unable, test_unable])
+            logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
 
         if epoch is args.epochs:
             break
+
+        if args.save_model and min_loss > test_cos_loss:
+            min_loss = test_cos_loss
+            opt_model_para = copy.deepcopy(model.state_dict())
 
         # renew dataset
         dataset_handler.renew_dataset()
@@ -279,8 +301,8 @@ def main():
     if logfile is not None:
         logfile.close()
 
-    #if args.save_model:
-    #    torch.save(model.state_dict(), "mnist_cnn.pt")
+    if args.save_model:
+        torch.save(opt_model_para, args.log+'.pt')
 
 
 if __name__ == '__main__':

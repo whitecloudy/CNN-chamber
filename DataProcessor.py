@@ -13,41 +13,17 @@ from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
 
-SIZE_OF_DATA = 6
-
 
 class dataParser:
-    def __init__(self, data, label, key, normalize):
+    def __init__(self, data, label, key):
         self.x_origin = data
         self.y_origin = label
-        self.tag_norm = normalize[0]
-        self.noise_norm = normalize[1]
-        self.channel_norm = normalize[2]
         self.x_data = self.parse_data(data)
         self.y_data = self.parse_label(label)
         self.heur_data = self.cal_heuristic(data)
         self.key = key
 
-    def cal_ls_estimator(self, data):
-        W = []
-        A = []
-
-        W_size = ArgsHandler.args.heu
-
-        if W_size < 6:
-            return self.y_data
-
-        for d in data:
-            W.append(d.phase_vec)
-            A.append([d.tag_sig])
-            if W_size <= 1:
-                break
-            else:
-                W_size -= 1
-
-        W = np.matrix(W)
-        A = np.matrix(A)
-
+    def cal_ls_estimator(self, W, A):
         if np.linalg.matrix_rank(W) < 6:
             raise NameError("Not enough rank")
 
@@ -61,62 +37,34 @@ class dataParser:
 
 
     def cal_heuristic(self, data):
-        H = self.cal_ls_estimator(data)
+        W = []
+        A = []
 
-        result_data = []
+        for d in data:
+            W.append(d.phase_vec)
+            A.append([d.tag_sig])
+
+        W = np.matrix(W)
+        A = np.matrix(A)
+
+        H = self.cal_ls_estimator(W, A)
 
         for i in range(6):
             label_element = (H[i])
             if cmath.isinf(label_element) or cmath.isnan(label_element):
                 raise NameError("Inf or Nan for Heur")
-            result_data.append(label_element.real)
-
-        for i in range(6):
-            label_element = (H[i])
-            if cmath.isinf(label_element) or cmath.isnan(label_element):
-                raise NameError("Inf or Nan for Heur")
-            result_data.append(label_element.imag)
-
-        return np.array(result_data)
+        
+        return np.array(H)
         
        
     def parse_data(self, data):
-        real_list = []
-        imag_list = []
-
-        for i in range(SIZE_OF_DATA):
-            real = []
-            imag = []
-
-            for phase in data[i].phase_vec:
-                real.append(phase.real)
-                imag.append(phase.imag)
-
-            real.append(data[i].tag_sig.real)
-            imag.append(data[i].tag_sig.imag)
-    
-            real.append(data[i].noise_std.real)
-            imag.append(data[i].noise_std.imag)
-
-            real_list.append(real)
-            imag_list.append(imag)
-        return_val = np.array([real_list, imag_list])
-
-        return return_val
+        x_data_list = np.array([d.x_row for d in data])
+        
+        return x_data_list
 
 
     def parse_label(self, label):
-        y_data = []
-
-        for i in range(6):
-            label_element = complex(label[i])
-            y_data.append(label_element.real)
-
-        for i in range(6):
-            label_element = complex(label[i])
-            y_data.append(label_element.imag)
-
-        return np.array(y_data)
+        return np.array(label)
 
 
 global_data_handler = DataHandler()
@@ -125,7 +73,7 @@ global_key_list = list(global_data_handler.getKey())
 import gc
 
 class DataProcessor:
-    def __init__(self, multiply=1, key_list=global_key_list, normalize=None):
+    def __init__(self, multiply=1, key_list=global_key_list, row_size=6, normalize=None):
         self.data_handler = global_data_handler
         self.output_list = []
         self.key_list = key_list
@@ -133,6 +81,7 @@ class DataProcessor:
         self.index_list = []
         self.index_len = 0
         self.multiply = 0
+        self.row_size = row_size
         para_tuples = []
 
         # data augmentation
@@ -198,7 +147,7 @@ class DataProcessor:
         self.multiply = multiply
         para_tuples = []
 
-        def make_output_data(data, label, key, normalize, multiply=1):
+        def make_output_data(data, label, key, row_size, multiply=1):
             prepared_data_list = []
 
             random.seed(time.time())
@@ -208,15 +157,15 @@ class DataProcessor:
             for count in range(multiply):
                 random.shuffle(data)
 
-                for i in range(0, len(data) - SIZE_OF_DATA + 1, SIZE_OF_DATA):
-                    data_to_parse = data[i:i+SIZE_OF_DATA]
+                for i in range(0, len(data) - row_size + 1, row_size):
+                    data_to_parse = data[i:i+row_size]
 
                     last_idx = i
 
                     parsedData = None
 
                     try:
-                        parsedData = dataParser(data_to_parse, label, key, normalize)
+                        parsedData = dataParser(data_to_parse, label, key)
                     except np.linalg.LinAlgError:
                         print("one go")
                         continue
@@ -226,13 +175,13 @@ class DataProcessor:
                     prepared_data_list.append(parsedData)
 
                 # handle last remaining data
-                if last_idx < len(data) - SIZE_OF_DATA:
-                    data_to_parse = data[len(data) - SIZE_OF_DATA:len(data)]
+                if last_idx < len(data) - row_size:
+                    data_to_parse = data[len(data) - row_size:len(data)]
 
                     parsedData = None
 
                     try:
-                        parsedData = dataParser(data_to_parse, label, key, normalize)
+                        parsedData = dataParser(data_to_parse, label, key)
                     except np.linalg.LinAlgError:
                         print("two go")
                         break
@@ -243,9 +192,9 @@ class DataProcessor:
             return prepared_data_list
 
         for data, label, key in self.data_label_key_list:
-            para_tuples.append((data, label, key, self.normalize, multiply))
+            para_tuples.append((data, label, key, self.row_size, multiply))
 
-        self.output_list = self.handle_cache(para_tuples, (self.multiply, SIZE_OF_DATA, "Nor"), make_output_data)
+        self.output_list = self.handle_cache(para_tuples, (self.multiply, self.row_size, "Nor"), make_output_data)
 
         gc.collect()
 
@@ -270,7 +219,6 @@ class DataProcessor:
         data_len = 0
 
         for data, label, key in self.data_label_key_list:
-
             data_len += len(data)
             for d in data:
                 mean_tag += abs(d.tag_sig)
@@ -299,16 +247,19 @@ class DataProcessor:
         else:
             idx = self.index_list[idx]
 
-        return torch.FloatTensor(self.output_list[idx].x_data), torch.FloatTensor(self.output_list[idx].y_data), torch.FloatTensor(self.output_list[idx].heur_data)
+        x = torch.FloatTensor([self.output_list[idx].x_data.real, self.output_list[idx].x_data.imag])
+        y = torch.FloatTensor([self.output_list[idx].y_data.real, self.output_list[idx].y_data.imag]).reshape(12,)
+        heur = torch.FloatTensor([self.output_list[idx].heur_data.real, self.output_list[idx].heur_data.imag]).reshape(12,)
 
+        return x, y, heur
 
 def calculate_MMSE_parameter(datas):
     H_Y_pair = []
     Y_avg_sum = 0
     H_avg_sum = 0
     for data in datas.output_list:
-        Y = data.cal_ls_estimator(data.x_origin)
-        H = data.y_origin.reshape(6)
+        Y = data.heur_data
+        H = data.y_data.reshape(6)
 
         H_Y_pair.append((H, Y))
 

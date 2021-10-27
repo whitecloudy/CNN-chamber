@@ -84,12 +84,12 @@ def data_aug3(data, label, key):
     shuffle_candidate = [[2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]]
 
     for shuffle in shuffle_candidate:
-        shuffle_label = [label[shuffle[i]] for i in range(6)]
+        shuffle_label = np.array([label[shuffle[i]] for i in range(6)])
         shuffle_key = key + (shuffle,)
         shuffle_data_list = [] #copy.deepcopy(data)
 
-        for d in enumerate(data):
-            shuffle_phase_vec = [d[shuffle[i]] for i in range(6)]
+        for d in data:
+            shuffle_phase_vec = [d.phase_vec[shuffle[i]] for i in range(6)]
             shuffle_data_list.append(dataParser(shuffle_phase_vec, shuffle_key, d.round_num, d.noise_std, d.tag_sig))
 
         result_list.append((shuffle_data_list, shuffle_label, shuffle_key))

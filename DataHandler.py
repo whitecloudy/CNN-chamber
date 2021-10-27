@@ -110,7 +110,7 @@ class DataHandler:
             channel[i] = (cha/abs(cha))
         """
         
-        return channel
+        return np.array(channel)
 
 
     def getData(self, key):

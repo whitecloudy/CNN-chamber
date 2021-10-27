@@ -8,8 +8,8 @@ from torch.utils.data import Dataset
 from DataProcessor import DataProcessor, global_key_list, global_data_handler, calculate_MMSE_parameter
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, key_list, normalize=None):
-        self.data_processor = DataProcessor(multiply, key_list, normalize)
+    def __init__(self, multiply, key_list, data_size=6, normalize=None):
+        self.data_processor = DataProcessor(multiply, key_list, data_size, normalize)
         self.MMSE_para = torch.tensor(calculate_MMSE_parameter(self.data_processor), dtype=torch.complex64)
 
     def renew_data(self, multiply):
@@ -134,11 +134,11 @@ class DatasetHandler:
         #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
         #self.normalize = (0.028442474880584625, 0.0002280199237627333, np.array([0.02179932, 0.03584705, 0.02130222, 0.00743575, 0.00666348, 0.00799966]))
         
-        self.training_dataset = BeamDataset(self.multiply, self.key_for_training)#, self.normalize)
+        self.training_dataset = BeamDataset(self.multiply, self.key_for_training, ArgsHandler.args.W)#, self.normalize)
         self.normalize = self.training_dataset.data_processor.normalize
         self.training_normalize = self.training_dataset.data_processor.normalize
 
-        self.test_dataset = BeamDataset(self.multiply, self.key_for_test, self.normalize)
+        self.test_dataset = BeamDataset(self.multiply, self.key_for_test, ArgsHandler.args.W, self.normalize)
         self.testing_normalize = self.test_dataset.data_processor.normalize
 
 

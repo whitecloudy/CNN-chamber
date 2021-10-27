@@ -35,8 +35,8 @@ def init_args():
                         help='For Saving the current Model')
     parser.add_argument('--log', type=str, default=None,
                         help='If log file name given, we write Logs')
-    parser.add_argument('--heu', type=int, default=27,
-                        help='Heuristic W size')
+    parser.add_argument('--W', type=int, default=6,
+                        help='Row Size')
     parser.add_argument('--model', type=int, default=1,
                         help='Select Model number')
 

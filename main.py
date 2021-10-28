@@ -14,7 +14,7 @@ import csv
 import copy
 
 class Net(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, row_size):
         super(Net, self).__init__()
         self.model = model
         model = model % 2
@@ -29,7 +29,9 @@ class Net(nn.Module):
             self.fc2 = nn.Linear(256, 12)
         elif model == 1:
             self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
+            row_size -= 2
             self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
+            row_size -= 2
             self.heur_fc1 = nn.Linear(12, 256)
             self.dropout1 = nn.Dropout(0.25)
             self.dropout2 = nn.Dropout(0.5)
@@ -37,7 +39,7 @@ class Net(nn.Module):
             self.batch2 = nn.BatchNorm2d(64)
             self.batch3 = nn.BatchNorm1d(1024)
             self.heur_batch = nn.BatchNorm1d(256)
-            self.fc1 = nn.Linear(2 * 4 * 64 + 256, 1024) # 21 * 2 * 64
+            self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
             self.fc2 = nn.Linear(1024, 12)
 
             torch.nn.init.xavier_uniform_(self.conv1.weight)
@@ -141,7 +143,6 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
     train_unable_heur = 0
 
     l = torch.nn.MSELoss(reduction='mean')
-
 
     with torch.no_grad():
         for data, target, heur in test_loader:
@@ -253,7 +254,7 @@ def main():
     
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-    model = Net(args.model).to(device)
+    model = Net(args.model, args.W).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     x_norm_vector, y_norm_vector = training_dataset.getNormPara()

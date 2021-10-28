@@ -120,7 +120,7 @@ class DataProcessor:
 
         from pathlib import Path
 
-        cache_filename = str(Path.home()) + "/cache/" + hash_handler.digest().hex()
+        cache_filename = str(Path.home()) + "/cache/" + str(additional_tuples) + hash_handler.digest().hex()
 
         rt_data = []
         print(cache_filename)

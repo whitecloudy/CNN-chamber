@@ -39,6 +39,9 @@ def init_args():
                         help='Row Size')
     parser.add_argument('--model', type=int, default=1,
                         help='Select Model number')
+    parser.add_argument('--test', type=str, default=None,
+                        help='Do the Test')
+
 
     global args
     args = parser.parse_args()

@@ -6,20 +6,27 @@ import cmath
 import copy
 import sys
 import pickle
+import gc
 
-from Proc import do_work
+from Proc import do_work, pseudo_list
 from DataAugmentation import data_augmentation, aug_para
 from DataHandler import DataHandler
 from itertools import permutations
 import ArgsHandler
 
 
+global_data_handler = DataHandler()
+global_key_list = list(global_data_handler.getKey())
+
+
 class dataParser:
-    def __init__(self, data, label, key):
-        self.x_data = self.parse_data(data)
-        self.y_data = self.parse_label(label)
-        self.heur_data = self.cal_heuristic(data)
-        self.key = key
+    def __init__(self, data, index):
+        self.data = data
+        self.index = index
+
+    def heur_data(self):
+        return self.cal_heuristic()
+
 
     def cal_ls_estimator(self, W, A):
         if np.linalg.matrix_rank(W) < 6:
@@ -34,16 +41,19 @@ class dataParser:
         return H
 
 
-    def cal_heuristic(self, data):
+    def cal_heuristic(self):
         W = []
         A = []
 
-        for d in data:
-            W.append(d.phase_vec)
-            A.append([d.tag_sig])
+        for i in self.index:
+            phase_vec = self.data[i[0]][0][i[1]].phase_vec
+            tag_sig = self.data[i[0]][0][i[1]].tag_sig
+            W.append(phase_vec)
+            A.append([tag_sig])
 
         W = np.matrix(W)
         A = np.matrix(A)
+        
 
         H = self.cal_ls_estimator(W, A)
 
@@ -53,22 +63,17 @@ class dataParser:
                 raise NameError("Inf or Nan for Heur")
         
         return np.array(H)
-        
-       
-    def parse_data(self, data):
-        x_data_list = np.array([d.x_row for d in data])
-        
-        return x_data_list
+
+    def x_data(self):
+        return np.array([self.data[i[0]][0][i[1]].x_row for i in self.index])
 
 
-    def parse_label(self, label):
-        return np.array(label)
+    def y_data(self):
+        return np.array(self.data[self.index[0][0]][1])
 
+    def key(self):
+        return self.data[self.index[0][0]][2]
 
-global_data_handler = DataHandler()
-global_key_list = list(global_data_handler.getKey())
-
-import gc
 
 class DataProcessor:
     def __init__(self, multiply=1, key_list=global_key_list, row_size=6, normalize=None):
@@ -122,17 +127,17 @@ class DataProcessor:
 
         cache_filename = str(Path.home()) + "/cache/" + str(additional_tuples) + hash_handler.digest().hex()
 
-        rt_data = []
+        rt_data = pseudo_list()
         print(cache_filename)
-
         if os.path.isfile(cache_filename):
             print("Cache file found")
             with open(cache_filename, "rb") as cache_file:
                 rt_data = pickle.load(cache_file)
         else:
             print("No Cache file found")
-            for result in do_work(func, para_tuples, 16):
-                rt_data += result
+
+            rt_data = do_work(func, para_tuples, 16)
+            print("Work is Done")
             
             with open(cache_filename, "wb") as cache_file:
                 pickle.dump(rt_data, cache_file)
@@ -145,7 +150,9 @@ class DataProcessor:
         self.multiply = multiply
         para_tuples = []
 
-        def make_output_data(data, label, key, row_size, multiply=1):
+        def make_output_data(dlk_list, data_idx, row_size, multiply=1):
+            data, label, key = dlk_list[data_idx]
+
             prepared_data_list = []
 
             random.seed(time.time())
@@ -159,14 +166,15 @@ class DataProcessor:
                 for i in range(0, len(data) - row_size + 1, row_size):
                     data_to_parse = []
                     for j in range(i, i+row_size):
-                        data_to_parse.append(data[idx[j]])
+                        #data_to_parse.append(data[idx[j]])
+                        data_to_parse.append((data_idx, idx[j]))
 
                     last_idx = i
 
                     parsedData = None
 
                     try:
-                        parsedData = dataParser(data_to_parse, label, key)
+                        parsedData = dataParser(dlk_list, data_to_parse)
                     except np.linalg.LinAlgError:
                         print("one go")
                         continue
@@ -179,14 +187,16 @@ class DataProcessor:
                 if last_idx < len(data) - row_size:
                     data_to_parse = []
                     for j in range(len(data) - row_size, len(data)):
-                        data_to_parse.append(data[idx[j]])
+                        data_to_parse.append((data_idx, idx[j]))
+                        #data_to_parse.append(data[idx[j]])
 
                     #data_to_parse = data[len(data) - row_size:len(data)]
 
                     parsedData = None
 
                     try:
-                        parsedData = dataParser(data_to_parse, label, key)
+                        parsedData = dataParser(dlk_list, data_to_parse)
+
                     except np.linalg.LinAlgError:
                         print("two go")
                         break
@@ -194,10 +204,11 @@ class DataProcessor:
                         break
 
                     prepared_data_list.append(parsedData)
+
             return prepared_data_list
 
-        for data, label, key in self.data_label_key_list:
-            para_tuples.append((data, label, key, self.row_size, multiply))
+        for i, dlk in enumerate(self.data_label_key_list):
+            para_tuples.append((self.data_label_key_list, i, self.row_size, multiply))
 
         self.output_list = self.handle_cache(para_tuples, (self.multiply, self.row_size, "Nor"), make_output_data)
 
@@ -208,6 +219,7 @@ class DataProcessor:
         self.index_len = int(len(self.output_list)/self.multiply)
         self.index_list = list(range(len(self.output_list)))
         random.shuffle(self.index_list)
+
 
     def shuffle_data(self):
         print("Shuffle data")
@@ -252,9 +264,9 @@ class DataProcessor:
         else:
             idx = self.index_list[idx]
 
-        x = torch.FloatTensor([self.output_list[idx].x_data.real, self.output_list[idx].x_data.imag])
-        y = torch.FloatTensor([self.output_list[idx].y_data.real, self.output_list[idx].y_data.imag]).reshape(12,)
-        heur = torch.FloatTensor([self.output_list[idx].heur_data.real, self.output_list[idx].heur_data.imag]).reshape(12,)
+        x = torch.FloatTensor([self.output_list[idx].x_data().real, self.output_list[idx]().x_data.imag])
+        y = torch.FloatTensor([self.output_list[idx].y_data().real, self.output_list[idx]().y_data.imag]).reshape(12,)
+        heur = torch.FloatTensor([self.output_list[idx].heur_data().real, self.output_list[idx].heur_data().imag]).reshape(12,)
 
         return x, y, heur
 
@@ -263,8 +275,8 @@ def calculate_MMSE_parameter(datas):
     Y_avg_sum = 0
     H_avg_sum = 0
     for data in datas.output_list:
-        Y = data.heur_data
-        H = data.y_data.reshape(6)
+        Y = data.heur_data()
+        H = data.y_data().reshape(6)
 
         H_Y_pair.append((H, Y))
 

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torchsummary import summary
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
@@ -123,24 +124,17 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm):
                 break
 
 
-def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
+def test(model, device, test_loader, x_norm, y_norm, mmse_para):
     model.eval()
     test_loss = 0
-    train_loss = 0
     test_heur_loss = 0
-    train_heur_loss = 0
     test_mmse_loss = 0
-    train_mmse_loss = 0
 
     test_cos_loss = 0
-    train_cos_loss = 0
     test_heur_cos_loss = 0
-    train_heur_cos_loss = 0
     test_mmse_cos_loss = 0
-    train_mmse_cos_loss = 0
 
     test_unable_heur = 0
-    train_unable_heur = 0
 
     l = torch.nn.MSELoss(reduction='mean')
 
@@ -170,53 +164,18 @@ def test(model, device, train_loader, test_loader, x_norm, y_norm, mmse_para):
             test_heur_cos_loss += cos_loss(heur, target)
             test_mmse_cos_loss += cos_loss(mmse, target)
 
-    with torch.no_grad():
-        for data, target, heur in train_loader:
-            data, target = data.to(device), target.to(device)
-            heur = heur.to(device)
-
-            data *= x_norm
-            target *= y_norm
-            heur *= y_norm
-
-            output = model(data, heur)
-
-            output /= y_norm
-            target /= y_norm
-            heur /= y_norm
-
-            mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
-            mmse = torch.cat((mmse.real, mmse.imag), 1)
-
-            train_loss += l(output, target)
-            train_heur_loss += l(heur, target)
-            train_mmse_loss += l(mmse, target)
-
-            train_cos_loss += cos_loss(output, target)
-            train_heur_cos_loss += cos_loss(heur, target)
-            train_mmse_cos_loss += cos_loss(mmse, target)
-
     test_loss /= len(test_loader)
-    train_loss /= len(train_loader)
     test_heur_loss /= len(test_loader)
-    train_heur_loss /= len(train_loader)
     test_mmse_loss /= len(test_loader)
-    train_mmse_loss /= len(train_loader)
 
     test_cos_loss /= len(test_loader)
-    train_cos_loss /= len(train_loader)
     test_heur_cos_loss /= len(test_loader)
-    train_heur_cos_loss /= len(train_loader)
     test_mmse_cos_loss /= len(test_loader)
-    train_mmse_cos_loss /= len(train_loader)
 
-    print('\nTrain set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%'.format(
-        train_loss, train_heur_loss, train_mmse_loss, train_unable_heur*100))
-
-    print('\nValidation set: Average loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
+    print('\nAverage loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
         test_loss, test_heur_loss, test_mmse_loss, test_unable_heur*100))
 
-    return float(train_loss), float(test_loss), float(train_heur_loss), float(test_heur_loss), float(train_mmse_loss), float(test_mmse_loss), float(train_cos_loss), float(test_cos_loss), float(train_heur_cos_loss), float(test_heur_cos_loss), float(train_mmse_cos_loss), float(test_mmse_cos_loss), train_unable_heur, test_unable_heur
+    return float(test_loss), float(test_heur_loss), float(test_mmse_loss), float(test_cos_loss), float(test_heur_cos_loss), float(test_mmse_cos_loss), test_unable_heur
 
 
 def main():
@@ -251,10 +210,12 @@ def main():
     print("Training Dataset : ", len(training_dataset))
     test_dataset = dataset_handler.test_dataset
     print("Test Dataset : ", len(test_dataset))
+
+    model = Net(args.model, args.W).to(device)
+    print(summary(model))
     
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-    model = Net(args.model, args.W).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     x_norm_vector, y_norm_vector = training_dataset.getNormPara()
@@ -278,7 +239,10 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector)
-        train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable = test(model, device, train_loader, test_loader, x_norm_vector, y_norm_vector, mmse_para)
+
+        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, test_loader, x_norm_vector, y_norm_vector, mmse_para)
+        train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_loader, x_norm_vector, y_norm_vector, mmse_para)
+
         scheduler.step()
 
         if logCSV is not None:

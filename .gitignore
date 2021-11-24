@@ -140,5 +140,5 @@ cython_debug/
 cache/
 data/
 
-.csv
-.pt
+*.csv
+*.pt

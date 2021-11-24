@@ -17,7 +17,6 @@ class dataParser:
         self.noise_std = noise_std
         self.tag_sig = tag_sig
         self.x_row = np.append(np.append(self.phase_vec, self.tag_sig), self.noise_std)
-        
 
     @classmethod
     def from_row_filename(cls, row, filename):
@@ -74,6 +73,8 @@ class DataHandler:
             except IsADirectoryError:
                 pass
 
+        self.key_list = list(sorted(self.data_dict.keys()))
+
     def getKey(self):
         return self.data_dict.keys()
 
@@ -122,7 +123,6 @@ class DataHandler:
         sig_data = []
         exp_data = []
 
-
         for data in self.data_dict[key]:
             real_sig = data.tag_sig
             expect_sig = data.phase_vec * H
@@ -148,7 +148,7 @@ class DataHandler:
         return key in self.data_dict
 
     def __getitem__(self, idx):
-        key = list(self.data_dict.keys())[idx]
+        key = self.key_list[idx]
         return self.getData(key), self.getLabel(key), key
 
 
@@ -158,7 +158,6 @@ def main():
     for d, l, k in data:
         for amp in abs(l):
             print(float(amp), ",", len(d))
-
 
 if __name__ == "__main__":
     main()

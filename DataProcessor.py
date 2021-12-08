@@ -7,6 +7,7 @@ import copy
 import sys
 import pickle
 import gc
+import math
 
 from Proc import do_work, pseudo_list
 from DataAugmentation import data_augmentation, aug_para
@@ -20,12 +21,10 @@ global_key_list = list(global_data_handler.getKey())
 
 
 class dataParser:
-    def __init__(self, data, index):
+    def __init__(self, data, label, key):
         self.data = data
-        self.index = index
-
-    def heur_data(self):
-        return self.cal_heuristic()
+        self.label = label
+        self.key = key
 
 
     def cal_ls_estimator(self, W, A):
@@ -45,9 +44,9 @@ class dataParser:
         W = []
         A = []
 
-        for i in self.index:
-            phase_vec = self.data[i[0]][0][i[1]].phase_vec
-            tag_sig = self.data[i[0]][0][i[1]].tag_sig
+        for d in self.data:
+            phase_vec = d.phase_vec
+            tag_sig = d.tag_sig
             W.append(phase_vec)
             A.append([tag_sig])
 
@@ -64,21 +63,37 @@ class dataParser:
         
         return np.array(H)
 
-    def x_data(self):
-        return np.array([self.data[i[0]][0][i[1]].x_row for i in self.index])
+    def check_rank(self):
+        W = []
+        for d in self.data:
+            phase_vec = d.phase_vec
+            W.append(phase_vec)
 
+        if np.linalg.matrix_rank(W) < 6:
+            return False
+        else:
+            return True
+
+
+
+    def heur_data(self):
+        return self.cal_heuristic()
+
+    def x_data(self):
+        return np.array([d.x_row for d in self.data])
 
     def y_data(self):
-        return np.array(self.data[self.index[0][0]][1])
+        return np.array(self.label)
 
-    def key(self):
-        return self.data[self.index[0][0]][2]
+    def key_data(self):
+        return self.key
 
 
 class DataProcessor:
     def __init__(self, multiply=1, key_list=global_key_list, row_size=6, normalize=None):
         self.data_handler = global_data_handler
-        self.output_list = []
+        self.output_len_list = []
+        self.output_idx_list = []
         self.key_list = key_list
         self.data_label_key_list = []
         self.index_list = []
@@ -108,7 +123,7 @@ class DataProcessor:
             self.normalize = self.calculate_normalize()
         else:
             self.normalize = normalize
-        
+
         # prepare output data
         self.prepare_data(multiply)
 
@@ -138,92 +153,72 @@ class DataProcessor:
 
             rt_data = do_work(func, para_tuples, 16)
             print("Work is Done")
-            
+
             with open(cache_filename, "wb") as cache_file:
                 pickle.dump(rt_data, cache_file)
-        
+
         return rt_data
 
 
     def prepare_data(self, multiply):
-        self.output_list = []
+        self.output_len_list = []
+        self.output_idx_list = []
         self.multiply = multiply
-        para_tuples = []
-
-        def make_output_data(dlk_list, data_idx, row_size, multiply=1):
-            data, label, key = dlk_list[data_idx]
-
-            prepared_data_list = []
-
-            random.seed(time.time())
-
-            last_idx = 0
-            
-            for count in range(multiply):
-                idx = list(range(len(data)))
-                random.shuffle(idx)
-
-                for i in range(0, len(data) - row_size + 1, row_size):
-                    data_to_parse = []
-                    for j in range(i, i+row_size):
-                        #data_to_parse.append(data[idx[j]])
-                        data_to_parse.append((data_idx, idx[j]))
-
-                    last_idx = i
-
-                    parsedData = None
-
-                    try:
-                        parsedData = dataParser(dlk_list, data_to_parse)
-                    except np.linalg.LinAlgError:
-                        print("one go")
-                        continue
-                    except NameError:
-                        continue
-
-                    prepared_data_list.append(parsedData)
-
-                # handle last remaining data
-                if last_idx < len(data) - row_size:
-                    data_to_parse = []
-                    for j in range(len(data) - row_size, len(data)):
-                        data_to_parse.append((data_idx, idx[j]))
-                        #data_to_parse.append(data[idx[j]])
-
-                    #data_to_parse = data[len(data) - row_size:len(data)]
-
-                    parsedData = None
-
-                    try:
-                        parsedData = dataParser(dlk_list, data_to_parse)
-
-                    except np.linalg.LinAlgError:
-                        print("two go")
-                        break
-                    except NameError:
-                        break
-
-                    prepared_data_list.append(parsedData)
-
-            return prepared_data_list
-
-        for i, dlk in enumerate(self.data_label_key_list):
-            para_tuples.append((self.data_label_key_list, i, self.row_size, multiply))
-
-        self.output_list = self.handle_cache(para_tuples, (self.multiply, self.row_size, "Nor"), make_output_data)
 
         gc.collect()
 
+        self.index_len = 0
+        for idx, dlk in enumerate(self.data_label_key_list):
+            d = dlk[0]
+            d_len = len(d)
+            data_len = math.ceil(d_len/self.row_size)
+            data_idx_list = list(range(d_len))
+            random.shuffle(data_idx_list)
+
+            self.index_len += data_len
+            self.output_idx_list.append(data_idx_list)
+            self.output_len_list.append(data_len)
+
         print("Done")
 
-        self.index_len = int(len(self.output_list)/self.multiply)
-        self.index_list = list(range(len(self.output_list)))
-        random.shuffle(self.index_list)
+
+    def indexing_data(self, ref_idx):
+        m_idx = 0
+
+        while True:
+            for i, length in enumerate(self.output_len_list):
+                if length > ref_idx:
+                    m_idx = i
+                    break
+                else:
+                    ref_idx -= length
+
+            idx_list = self.output_idx_list[m_idx]
+            d, l, k = self.data_label_key_list[m_idx]
+
+            if (self.output_len_list[m_idx]-1) == ref_idx:
+                end_idx = len(idx_list)
+                start_idx = end_idx - self.row_size
+                x_data = [d[idx_list[i]] for i in range(start_idx, end_idx)]
+            else:
+                start_idx = ref_idx * self.row_size
+                end_idx = start_idx + self.row_size
+                x_data = [d[idx_list[i]] for i in range(start_idx, end_idx)]
+
+            return_data = dataParser(x_data, l, k)
+
+            if return_data.check_rank():
+                break
+            else:
+                ref_idx -= 1
+
+        return return_data
 
 
     def shuffle_data(self):
         print("Shuffle data")
-        random.shuffle(self.index_list)
+        self.prepare_data(self.multiply)
+
 
     def calculate_normalize(self):
         mean_tag = 0.0
@@ -249,60 +244,72 @@ class DataProcessor:
         mean_std /= data_len
         avg_tag /= data_len
         avg_std /= data_len
-        
+
         mean_label /= len(self.data_label_key_list)
         avg_label /= len(self.data_label_key_list)
 
         return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
 
+
+    def calculate_MMSE_parameter(self):
+        H_Y_pair = []
+        Y_avg_sum = 0
+        H_avg_sum = 0
+
+        for i in range(self.index_len):
+            data = self.indexing_data(i)
+            Y = data.heur_data()
+            H = data.y_data().reshape(6)
+
+            H_Y_pair.append((H, Y))
+
+            Y_avg_sum += Y
+
+            H_avg_sum += H
+
+        N = self.index_len
+
+        mu_y = Y_avg_sum / N
+        mu_h = H_avg_sum / N
+        r_hy = 0
+        r_yy = 0
+
+        for h, y in H_Y_pair:
+            h_hat = h - mu_h
+            y_hat = y - mu_y
+            r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
+            r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
+
+        r_hy /= len(H_Y_pair)
+        r_yy /= len(H_Y_pair)
+
+        r_yy_inv = r_yy.getI()
+
+        return r_hy * r_yy_inv
+
+
     def __len__(self):
         return self.index_len
+
 
     def __getitem__(self, idx):
         if self.index_len <= idx:
             raise IndexError
         else:
-            idx = self.index_list[idx]
+            data = self.indexing_data(idx)
 
-        x = torch.FloatTensor([self.output_list[idx].x_data().real, self.output_list[idx]().x_data.imag])
-        y = torch.FloatTensor([self.output_list[idx].y_data().real, self.output_list[idx]().y_data.imag]).reshape(12,)
-        heur = torch.FloatTensor([self.output_list[idx].heur_data().real, self.output_list[idx].heur_data().imag]).reshape(12,)
+        heur_data = data.heur_data()
+        x_data = data.x_data()
+        y_data = data.y_data()
+
+        x = torch.FloatTensor([x_data.real, x_data.imag])
+        y = torch.FloatTensor([y_data.real, y_data.imag]).reshape(12,)
+        heur = torch.FloatTensor([heur_data.real, heur_data.imag]).reshape(12,)
 
         return x, y, heur
 
-def calculate_MMSE_parameter(datas):
-    H_Y_pair = []
-    Y_avg_sum = 0
-    H_avg_sum = 0
-    for data in datas.output_list:
-        Y = data.heur_data()
-        H = data.y_data().reshape(6)
 
-        H_Y_pair.append((H, Y))
 
-        Y_avg_sum += Y
-
-        H_avg_sum += H
-
-    N = len(datas.output_list)
-
-    mu_y = Y_avg_sum / N
-    mu_h = H_avg_sum / N
-    r_hy = 0
-    r_yy = 0
-
-    for h, y in H_Y_pair:
-        h_hat = h - mu_h
-        y_hat = y - mu_y
-        r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
-        r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
-
-    r_hy /= len(H_Y_pair)
-    r_yy /= len(H_Y_pair)
-
-    r_yy_inv = r_yy.getI()
-
-    return r_hy * r_yy_inv
 
 
 def main():

@@ -197,7 +197,6 @@ def main():
             print("No gpu number")
             exit(1)
 
-
         cuda_kwargs = {'num_workers': 8,
                        'pin_memory': True,
                        'shuffle': True}
@@ -212,7 +211,7 @@ def main():
     print("Test Dataset : ", len(test_dataset))
 
     model = Net(args.model, args.W).to(device)
-    print(summary(model))
+    #print(summary(model))
     
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
@@ -239,8 +238,10 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector)
-
+        
+        print("<< Test Loader >>")
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, test_loader, x_norm_vector, y_norm_vector, mmse_para)
+        print("<< Train Loader >>")
         train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_loader, x_norm_vector, y_norm_vector, mmse_para)
 
         scheduler.step()

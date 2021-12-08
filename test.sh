@@ -3,7 +3,7 @@
 #for heu in {9,15,21,27}
 for model in {3,}
 do
-  for heu in {7..12}
+  for heu in {6..12}
   do
     for i in {0..4}
     do

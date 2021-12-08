@@ -5,12 +5,12 @@ import numpy as np
 import ArgsHandler
 
 from torch.utils.data import Dataset
-from DataProcessor import DataProcessor, global_key_list, global_data_handler, calculate_MMSE_parameter
+from DataProcessor import DataProcessor, global_key_list, global_data_handler
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, key_list, data_size=6, normalize=None):
         self.data_processor = DataProcessor(multiply, key_list, data_size, normalize)
-        self.MMSE_para = torch.tensor(calculate_MMSE_parameter(self.data_processor), dtype=torch.complex64)
+        self.MMSE_para = None
 
     def renew_data(self, multiply):
         self.data_processor.shuffle_data()
@@ -32,8 +32,10 @@ class BeamDataset(Dataset):
 
         return torch.FloatTensor(x_norm_vector), torch.FloatTensor(y_norm_vector)
 
-
     def getMMSEpara(self):
+        if self.MMSE_para is None:
+            self.MMSE_para = torch.tensor(self.data_processor.calculate_MMSE_parameter(), dtype=torch.complex64)
+
         return self.MMSE_para
 
     def __len__(self):

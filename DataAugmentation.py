@@ -85,8 +85,9 @@ def data_aug3(data, label, key):
 
     for shuffle in shuffle_candidate:
         shuffle_label = np.array([label[shuffle[i]] for i in range(6)])
+
         shuffle_key = key + (shuffle,)
-        shuffle_data_list = [] #copy.deepcopy(data)
+        shuffle_data_list = []
 
         for d in data:
             shuffle_phase_vec = [d.phase_vec[shuffle[i]] for i in range(6)]

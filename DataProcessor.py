@@ -13,7 +13,6 @@ from Proc import do_work, pseudo_list
 from DataAugmentation import data_augmentation, aug_para
 from DataHandler import DataHandler
 from itertools import permutations
-import ArgsHandler
 
 
 global_data_handler = DataHandler()
@@ -74,8 +73,6 @@ class dataParser:
         else:
             return True
 
-
-
     def heur_data(self):
         return self.cal_heuristic()
 
@@ -90,7 +87,7 @@ class dataParser:
 
 
 class DataProcessor:
-    def __init__(self, multiply=1, key_list=global_key_list, row_size=6, normalize=None):
+    def __init__(self, multiply=1, key_list=global_key_list):
         self.data_handler = global_data_handler
         self.output_len_list = []
         self.output_idx_list = []
@@ -99,68 +96,82 @@ class DataProcessor:
         self.index_list = []
         self.index_len = 0
         self.multiply = 0
-        self.row_size = row_size
         para_tuples = []
+
 
         # data augmentation
         for data, label, key in self.data_handler:
-            if key not in self.key_list:
+            if key[0:3] not in self.key_list:
                 continue
 
             if key[3] == ' directionalrefine':
                 continue
 
             para_tuples.append((data, label, key))
+        
+        cache_file_name = self.make_cache_hashname(para_tuples, aug_para)
 
-        self.data_label_key_list = self.handle_cache(para_tuples, aug_para, data_augmentation)
+        self.data_label_key_list = self.load_cache(cache_file_name)
+        if self.data_label_key_list is None:
+            self.data_label_key_list = do_work(data_augmentation, para_tuples, 16)
+            self.save_cache(self.data_label_key_list, cache_file_name)
 
         gc.collect()
 
         print("Data Augmentation Complete")
-
+        
+        """
         # config normalize value
         if normalize is None:
             self.normalize = self.calculate_normalize()
         else:
             self.normalize = normalize
+        """
 
         # prepare output data
-        self.prepare_data(multiply)
+        # self.data_list = self.prepare_data(multiply)
 
-
-    def handle_cache(self, para_tuples, additional_tuples, func):
+    def make_cache_hashname(self, para_tuples, additional_tuples):
         import hashlib
-        import os
-
         tuples_byte = pickle.dumps(para_tuples)
         add_byte = pickle.dumps(additional_tuples)
         hash_handler = hashlib.sha3_224()
         hash_handler.update(tuples_byte)
         hash_handler.update(add_byte)
 
+        cache_filename = str(additional_tuples) + hash_handler.digest().hex()
+
+        return cache_filename
+
+    def save_cache(self, save_data, cache_filename):
+        import os
         from pathlib import Path
+        cache_path = str(Path.home()) + "/cache/" + cache_filename
 
-        cache_filename = str(Path.home()) + "/cache/" + str(additional_tuples) + hash_handler.digest().hex()
+        with open(cache_path, "wb") as cache_file:
+            pickle.dump(save_data, cache_file)
 
-        rt_data = pseudo_list()
+
+    def load_cache(self, cache_filename):
+        import os
+
+        from pathlib import Path
+        
+        cache_path = str(Path.home()) + "/cache/" + cache_filename
+
+        rt_data = None
         print(cache_filename)
-        if os.path.isfile(cache_filename):
+        if os.path.isfile(cache_path):
             print("Cache file found")
-            with open(cache_filename, "rb") as cache_file:
+            with open(cache_path, "rb") as cache_file:
                 rt_data = pickle.load(cache_file)
         else:
             print("No Cache file found")
 
-            rt_data = do_work(func, para_tuples, 16)
-            print("Work is Done")
-
-            with open(cache_filename, "wb") as cache_file:
-                pickle.dump(rt_data, cache_file)
-
         return rt_data
 
 
-    def prepare_data(self, multiply):
+    def prepare_data(self, row_size, multiply):
         self.output_len_list = []
         self.output_idx_list = []
         self.multiply = multiply
@@ -168,57 +179,37 @@ class DataProcessor:
         gc.collect()
 
         self.index_len = 0
+
+        result_list = []
         for idx, dlk in enumerate(self.data_label_key_list):
             d = dlk[0]
+            l = dlk[1]
+            k = dlk[2]
             d_len = len(d)
-            data_len = math.ceil(d_len/self.row_size)
+            data_len = math.ceil(d_len/row_size)
             data_idx_list = list(range(d_len))
-            random.shuffle(data_idx_list)
 
-            self.index_len += data_len
-            self.output_idx_list.append(data_idx_list)
-            self.output_len_list.append(data_len)
+            for repeat in range(multiply):
+                random.shuffle(data_idx_list)
 
-        print("Done")
+                for j in range(data_len):
+                    if (data_len-1) == j:
+                        end_idx = d_len
+                        start_idx = end_idx - row_size
+                        x_data = [d[data_idx_list[i]] for i in range(start_idx, end_idx)]
+                    else:
+                        start_idx = j * row_size
+                        end_idx = start_idx + row_size
+                        x_data = [d[data_idx_list[i]] for i in range(start_idx, end_idx)]
 
+                    data_c = dataParser(x_data, l, k)
 
-    def indexing_data(self, ref_idx):
-        m_idx = 0
+                    if data_c.check_rank():
+                        result_list.append((data_c.x_data(), data_c.heur_data(), data_c.y_data()))
+                    else:
+                        continue
 
-        while True:
-            for i, length in enumerate(self.output_len_list):
-                if length > ref_idx:
-                    m_idx = i
-                    break
-                else:
-                    ref_idx -= length
-
-            idx_list = self.output_idx_list[m_idx]
-            d, l, k = self.data_label_key_list[m_idx]
-
-            if (self.output_len_list[m_idx]-1) == ref_idx:
-                end_idx = len(idx_list)
-                start_idx = end_idx - self.row_size
-                x_data = [d[idx_list[i]] for i in range(start_idx, end_idx)]
-            else:
-                start_idx = ref_idx * self.row_size
-                end_idx = start_idx + self.row_size
-                x_data = [d[idx_list[i]] for i in range(start_idx, end_idx)]
-
-            return_data = dataParser(x_data, l, k)
-
-            if return_data.check_rank():
-                break
-            else:
-                ref_idx -= 1
-
-        return return_data
-
-
-    def shuffle_data(self):
-        print("Shuffle data")
-        self.prepare_data(self.multiply)
-
+        return result_list
 
     def calculate_normalize(self):
         mean_tag = 0.0
@@ -287,7 +278,7 @@ class DataProcessor:
 
         return r_hy * r_yy_inv
 
-
+    """
     def __len__(self):
         return self.index_len
 
@@ -307,20 +298,48 @@ class DataProcessor:
         heur = torch.FloatTensor([heur_data.real, heur_data.imag]).reshape(12,)
 
         return x, y, heur
-
-
-
+    """
 
 
 def main():
-    datas = DataProcessor(multiply=1)
+    key_list = global_key_list
+    trainable_key_list = []
+    error_thres = 0.15
+    data_div = 10
+    seed = 1
 
-    # for x, y in d:
-        #print(y.shape)
+    for key in key_list:
+        error, length = global_data_handler.evalLabel(key)
+        if length >= 54:
+            if error < error_thres:
+                trainable_key_list.append(key[0:3])
+    print(len(trainable_key_list))
+    
+    random.seed(seed)
+    random.shuffle(trainable_key_list)
 
-    #print(d.normalize)
+    key_len = len(trainable_key_list)
+    key_step_len = int(key_len/data_div)
+    key_remain = int(key_len - key_step_len*data_div)
+
+    start_idx = 0
+    end_idx = 0
+
+    for i in range(data_div):
+        start_idx = end_idx
+        end_idx += key_step_len
+        if key_remain > 0:
+            key_remain -= 1
+            end_idx += 1
+        step_key = trainable_key_list[start_idx: end_idx]
+        datas = DataProcessor(key_list=step_key)
+        for row_size in range(6, 13):
+            print("<<<", i, " ", row_size, ">>>")
+            data_list = datas.prepare_data(multiply=1, row_size=row_size)
+            filename = str(row_size)+"_"+str(i)+'_20211213.bin'
+            datas.save_cache(data_list, filename)
+
 
 
 if __name__ == "__main__":
-    ArgsHandler.init_args()
     main()

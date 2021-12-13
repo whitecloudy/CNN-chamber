@@ -44,6 +44,7 @@ class BeamDataset(Dataset):
     def __getitem__(self, idx):
         return self.data_processor[idx]
 
+
 class DatasetHandler:
     def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=5):
         self.key_list = global_key_list

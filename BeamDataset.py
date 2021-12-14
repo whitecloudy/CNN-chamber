@@ -3,152 +3,160 @@ import time
 import torch
 import numpy as np
 import ArgsHandler
+import Proc
+from CachefileHandler import load_cache, save_cache, make_cache_hashname
 
 from torch.utils.data import Dataset
 from DataProcessor import DataProcessor, global_key_list, global_data_handler
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, key_list, data_size=6, normalize=None):
-        self.data_processor = DataProcessor(multiply, key_list, data_size, normalize)
-        self.MMSE_para = None
+    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
+        self.multiply = multiply
 
-    def renew_data(self, multiply):
-        self.data_processor.shuffle_data()
+        cache_filename_list = [(str(data_size)+"_"+str(multiply)+"_"+str(i)+'_20211213.bin', ) for i in num_list]
+        self.hashname = make_cache_hashname(cache_filename_list)
+        self.data_list = []
+        self.idx_list = []
+
+        for idx, filename in enumerate(cache_filename_list):
+            loaded_data = load_cache(*filename)
+            self.data_list.append(loaded_data)
+            self.idx_list += [(idx, j) for j in range(len(loaded_data))]
+            print(len(self.idx_list))
+
+        self.MMSE_para = MMSE_para
+        self.normalize = normalize
+        self.renew_data()
+
+    def renew_data(self):
+        random.shuffle(self.idx_list)
+
+    def calculate_normalize(self):
+        x_mean = 0
+        y_mean = 0
+        h_mean = 0
+        for i, j in self.idx_list:
+            x_mat, h, y = self.data_list[i][j]
+            for x in x_mat:
+                x_mean += abs(np.array(x))
+            y_mean += abs(np.array(y).reshape(6, 1))
+            h_mean += abs(np.array(h).reshape(6, 1))
+
+        x_mean /= len(self.idx_list)
+        y_mean /= len(self.idx_list)
+        h_mean /= len(self.idx_list)
+
+        return (1/x_mean, 1/y_mean, 1/h_mean)
+    
+    def calculate_MMSE_parameter(self):
+        H_Y_pair = []
+        Y_avg_sum = 0
+        H_avg_sum = 0
+
+        for i, j in self.idx_list:
+            x, h, y = self.data_list[i][j]
+
+            Y = np.array(y).reshape((1,6))
+            H = np.array(h).reshape((1,6))
+
+            H_Y_pair.append((H, Y))
+
+            Y_avg_sum += Y
+            H_avg_sum += H
+
+        N = len(self.idx_list)
+
+        mu_y = Y_avg_sum / N
+        mu_h = H_avg_sum / N
+        r_hy = 0
+        r_yy = 0
+
+        for h, y in H_Y_pair:
+            h_hat = h - mu_h
+            y_hat = y - mu_y
+            r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
+            r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
+        print(r_hy.shape)
+
+        r_hy /= len(H_Y_pair)
+        r_yy /= len(H_Y_pair)
+
+        r_yy_inv = r_yy.getI()
+        mmse = r_hy * r_yy_inv
+
+        return mmse
+
 
     def getNormPara(self):
-        norm_tuple = self.data_processor.normalize
-        x_norm_vector = []
-        y_norm_vector = []
+        if self.normalize is None:
+            cache_name = self.hashname + '.norm'
+            self.normalize = load_cache(cache_name)
+            if self.normalize is None:
+                x, y, h = self.calculate_normalize()
+                self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
+                save_cache(self.normalize, cache_name)
 
-        x_norm_vector = [1. for i in range(6)]
-        x_norm_vector.append(1/float(norm_tuple[0]))
-        x_norm_vector.append(1/float(norm_tuple[1]))
-        
-        for n in norm_tuple[2]:
-            y_norm_vector.append(1/float(n))
-
-        for n in norm_tuple[2]:
-            y_norm_vector.append(1/float(n))
-
-        return torch.FloatTensor(x_norm_vector), torch.FloatTensor(y_norm_vector)
+        return self.normalize
 
     def getMMSEpara(self):
         if self.MMSE_para is None:
-            self.MMSE_para = torch.tensor(self.data_processor.calculate_MMSE_parameter(), dtype=torch.complex64)
+            cache_name = self.hashname + '.mmse'
+            self.MMSE_para = load_cache(cache_name)
+            if self.MMSE_para is None:
+                mmse = self.calculate_MMSE_parameter()
+                self.MMSE_para = torch.tensor(mmse, dtype=torch.complex64)
+                save_cache(self.MMSE_para, cache_name)
 
         return self.MMSE_para
 
     def __len__(self):
-        return len(self.data_processor)
+        return int(len(self.idx_list)/self.multiply)
 
     def __getitem__(self, idx):
-        return self.data_processor[idx]
+        i, j = self.idx_list[idx]
+        x, y, h = self.data_list[i][j]
+
+        x = torch.FloatTensor([x.real, x.imag])
+        y = torch.FloatTensor([y.real, y.imag]).reshape(12,)
+        h = torch.FloatTensor([h.real, h.imag]).reshape(12,)
+
+        return x, y, h
 
 
 class DatasetHandler:
-    def __init__(self, error_thres=0.15, train_data_ratio=0.9, multiply=5):
-        self.key_list = global_key_list
-        self.key_usable = []
-        self.key_trainable = []
-        self.key_for_training = []
-        self.key_for_test = []
-
+    def __init__(self,  multiply=3, data_div=5, val_data_num=1, row_size=6):
         self.multiply = multiply
-        self.train_data_ratio = train_data_ratio
+        self.data_div = data_div
+        self.val_data_num = val_data_num
+        self.row_size = row_size
 
         self.training_dataset = None
         self.test_dataset = None
-
-        for key in self.key_list:
-            error, length = global_data_handler.evalLabel(key)
-            if length >= 54:
-                if error < error_thres:
-                    self.key_trainable.append(key)
-                else:
-                    self.key_usable.append(key)
-                    print("Data ", key, " will be ignored.")
-                    print("Error : {:.4f}".format(error), "\tLength : ", length)
-                    print()
-        print(len(self.key_usable)+len(self.key_trainable))
-
+        
         self.prepare_dataset()
 
     def prepare_dataset(self):
-        random.seed(ArgsHandler.args.seed)
-        random.shuffle(self.key_trainable)
+        data_div = self.data_div
+        val_data_num = self.val_data_num
 
-        training_key_length = int(len(self.key_trainable) * self.train_data_ratio)
-        
-        key_position = []
-        for key in self.key_trainable:
-            pos = key[0:3]
-            if pos not in key_position:
-                key_position.append(pos)
-            """
-            if key[0] == 'data/normal_210519.csv':
-                self.key_for_test.append(key)
-            else:
-                self.key_for_training.append(key)
-            """
-        random.shuffle(key_position)
-        
-        data_div = ArgsHandler.args.data_div
-        val_data_num = ArgsHandler.args.val_data_num
-        
-        key_len = len(key_position)
-        key_step_len = int(key_len/data_div)
-        key_remain = int(key_len - key_step_len*data_div)
-        
-        key_range = []
-
-        s_idx = 0
-        e_idx = key_step_len
-
-        if key_remain > 0:
-            e_idx += 1
+        nums_for_training = []
+        nums_for_validation = []
 
         for i in range(data_div):
-            key_range.append((s_idx, e_idx))
-            print(e_idx)
-            
-            s_idx = e_idx
-            e_idx = e_idx + key_step_len
+            step_num_list = list(range(i * int(10/data_div), (i+1) * int(10/data_div)))
 
-            if i+1 < key_remain:
-                e_idx += 1
-
-        training_pos = []
-        test_pos = []
-
-        for idx, rng in enumerate(key_range):
-            if idx == val_data_num:
-                test_pos = key_position[rng[0]: rng[1]]
+            if i == val_data_num:
+                nums_for_validation += step_num_list
             else:
-                training_pos += key_position[rng[0]: rng[1]]
-
-        for key in self.key_trainable:
-            if key[0:3] in training_pos:
-                self.key_for_training.append(key)
-            elif key[0:3] in test_pos:
-                self.key_for_test.append(key)
-
-        self.key_for_test += self.key_usable
-        #self.key_for_training = self.key_trainable[0:training_key_length]
-        #self.key_for_test = self.key_trainable[training_key_length:] + self.key_usable
-        #self.normalize = (0.028442474880584625, 0.0002280199237627333, np.array([0.02179932, 0.03584705, 0.02130222, 0.00743575, 0.00666348, 0.00799966]))
+                nums_for_training += step_num_list
         
-        self.training_dataset = BeamDataset(self.multiply, self.key_for_training, ArgsHandler.args.W)#, self.normalize)
-        self.normalize = self.training_dataset.data_processor.normalize
-        self.training_normalize = self.training_dataset.data_processor.normalize
-
-        self.test_dataset = BeamDataset(self.multiply, self.key_for_test, ArgsHandler.args.W, self.normalize)
-        self.testing_normalize = self.test_dataset.data_processor.normalize
-
+        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
+        self.normalize = self.training_dataset.getNormPara()
+        self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 
     def renew_dataset(self):
-        self.training_dataset.renew_data(self.multiply)
-        self.test_dataset.renew_data(self.multiply)
-
+        self.training_dataset.renew_data()
+        self.test_dataset.renew_data()
 
     def printLength(self):
         print(len(self.key_usable))
@@ -156,19 +164,11 @@ class DatasetHandler:
 
 
 def main():
-    d = DatasetHandler(error_thres=0.15)
-    print("<<<<<<<Training>>>>>>>>")
-    for norm in d.training_normalize:
-        print(abs(norm))
-        print()
-    print()
-    print("<<<<<<<Validation>>>>>>>>")
-    for norm in d.testing_normalize:
-        print(abs(norm))
-        print()
-    
-    d.printLength()
-
+    dataset_handler = DatasetHandler()
+    import gc
+    gc.collect()
+    print("Waiting")
+    test = input()
 
 if __name__ == "__main__":
     main()

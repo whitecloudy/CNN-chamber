@@ -101,7 +101,7 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm):
     l = torch.nn.MSELoss(reduction='mean')
     for batch_idx, (data, target, heur) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
-
+        
         data *= x_norm
         target *= y_norm
         heur *= y_norm
@@ -152,7 +152,7 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para):
             output /= y_norm
             target /= y_norm
             heur /= y_norm
-
+            
             mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
             mmse = torch.cat((mmse.real, mmse.imag), 1)
 
@@ -203,7 +203,7 @@ def main():
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    dataset_handler = DatasetHandler()
+    dataset_handler = DatasetHandler(data_div=args.data_div, val_data_num=args.val_data_num, row_size=args.W)
 
     training_dataset = dataset_handler.training_dataset
     print("Training Dataset : ", len(training_dataset))

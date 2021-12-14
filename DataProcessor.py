@@ -13,6 +13,7 @@ from Proc import do_work, pseudo_list
 from DataAugmentation import data_augmentation, aug_para
 from DataHandler import DataHandler
 from itertools import permutations
+from CachefileHandler import save_cache, load_cache
 
 
 global_data_handler = DataHandler()
@@ -111,10 +112,10 @@ class DataProcessor:
         
         cache_file_name = self.make_cache_hashname(para_tuples, aug_para)
 
-        self.data_label_key_list = self.load_cache(cache_file_name)
+        self.data_label_key_list = load_cache(cache_file_name)
         if self.data_label_key_list is None:
             self.data_label_key_list = do_work(data_augmentation, para_tuples, 16)
-            self.save_cache(self.data_label_key_list, cache_file_name)
+            save_cache(self.data_label_key_list, cache_file_name)
 
         gc.collect()
 
@@ -142,33 +143,6 @@ class DataProcessor:
         cache_filename = str(additional_tuples) + hash_handler.digest().hex()
 
         return cache_filename
-
-    def save_cache(self, save_data, cache_filename):
-        import os
-        from pathlib import Path
-        cache_path = str(Path.home()) + "/cache/" + cache_filename
-
-        with open(cache_path, "wb") as cache_file:
-            pickle.dump(save_data, cache_file)
-
-
-    def load_cache(self, cache_filename):
-        import os
-
-        from pathlib import Path
-        
-        cache_path = str(Path.home()) + "/cache/" + cache_filename
-
-        rt_data = None
-        print(cache_filename)
-        if os.path.isfile(cache_path):
-            print("Cache file found")
-            with open(cache_path, "rb") as cache_file:
-                rt_data = pickle.load(cache_file)
-        else:
-            print("No Cache file found")
-
-        return rt_data
 
 
     def prepare_data(self, row_size, multiply):
@@ -211,95 +185,6 @@ class DataProcessor:
 
         return result_list
 
-    def calculate_normalize(self):
-        mean_tag = 0.0
-        mean_std = 0.0
-        mean_label = np.zeros((6, 1))
-        avg_tag = 0.0+0.0j
-        avg_std = 0.0+0.0j
-        avg_label = np.zeros((6, 1), dtype='complex128')
-
-        data_len = 0
-
-        for data, label, key in self.data_label_key_list:
-            data_len += len(data)
-            for d in data:
-                mean_tag += abs(d.tag_sig)
-                mean_std += abs(d.noise_std)
-                avg_tag += d.tag_sig
-                avg_std += d.noise_std
-            mean_label += np.abs(label)
-            avg_label += label
-
-        mean_tag /= data_len
-        mean_std /= data_len
-        avg_tag /= data_len
-        avg_std /= data_len
-
-        mean_label /= len(self.data_label_key_list)
-        avg_label /= len(self.data_label_key_list)
-
-        return (mean_tag, mean_std, mean_label, avg_tag, avg_std, avg_label)
-
-
-    def calculate_MMSE_parameter(self):
-        H_Y_pair = []
-        Y_avg_sum = 0
-        H_avg_sum = 0
-
-        for i in range(self.index_len):
-            data = self.indexing_data(i)
-            Y = data.heur_data()
-            H = data.y_data().reshape(6)
-
-            H_Y_pair.append((H, Y))
-
-            Y_avg_sum += Y
-
-            H_avg_sum += H
-
-        N = self.index_len
-
-        mu_y = Y_avg_sum / N
-        mu_h = H_avg_sum / N
-        r_hy = 0
-        r_yy = 0
-
-        for h, y in H_Y_pair:
-            h_hat = h - mu_h
-            y_hat = y - mu_y
-            r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
-            r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
-
-        r_hy /= len(H_Y_pair)
-        r_yy /= len(H_Y_pair)
-
-        r_yy_inv = r_yy.getI()
-
-        return r_hy * r_yy_inv
-
-    """
-    def __len__(self):
-        return self.index_len
-
-
-    def __getitem__(self, idx):
-        if self.index_len <= idx:
-            raise IndexError
-        else:
-            data = self.indexing_data(idx)
-
-        heur_data = data.heur_data()
-        x_data = data.x_data()
-        y_data = data.y_data()
-
-        x = torch.FloatTensor([x_data.real, x_data.imag])
-        y = torch.FloatTensor([y_data.real, y_data.imag]).reshape(12,)
-        heur = torch.FloatTensor([heur_data.real, heur_data.imag]).reshape(12,)
-
-        return x, y, heur
-    """
-
 
 def main():
     key_list = global_key_list
@@ -307,6 +192,7 @@ def main():
     error_thres = 0.15
     data_div = 10
     seed = 1
+    multiply = 3
 
     for key in key_list:
         error, length = global_data_handler.evalLabel(key)
@@ -335,10 +221,9 @@ def main():
         datas = DataProcessor(key_list=step_key)
         for row_size in range(6, 13):
             print("<<<", i, " ", row_size, ">>>")
-            data_list = datas.prepare_data(multiply=1, row_size=row_size)
-            filename = str(row_size)+"_"+str(i)+'_20211213.bin'
-            datas.save_cache(data_list, filename)
-
+            data_list = datas.prepare_data(multiply=multiply, row_size=row_size)
+            filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20211213.bin'
+            save_cache(data_list, filename)
 
 
 if __name__ == "__main__":

@@ -17,81 +17,50 @@ import copy
 class Net(nn.Module):
     def __init__(self, model, row_size):
         super(Net, self).__init__()
-        self.model = model
-        model = model % 2
-        if model == 0:
-            self.conv1 = nn.Conv2d(2, 32, 4, 1) #input is 27 * 8 * 2
-            self.conv2 = nn.Conv2d(32, 64, 4, 1) # input is 24 * 5 * 32
-            self.dropout1 = nn.Dropout(0.25)
-            self.dropout2 = nn.Dropout(0.5)
-            self.batch1 = nn.BatchNorm2d(32)
-            self.batch2 = nn.BatchNorm2d(64)
-            self.fc1 = nn.Linear(21 * 2 * 64, 256) # 21 * 2 * 64
-            self.fc2 = nn.Linear(256, 12)
-        elif model == 1:
-            self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
-            row_size -= 2
-            self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
-            row_size -= 2
-            self.heur_fc1 = nn.Linear(12, 256)
-            self.dropout1 = nn.Dropout(0.25)
-            self.dropout2 = nn.Dropout(0.5)
-            self.batch1 = nn.BatchNorm2d(64)
-            self.batch2 = nn.BatchNorm2d(64)
-            self.batch3 = nn.BatchNorm1d(1024)
-            self.heur_batch = nn.BatchNorm1d(256)
-            self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
-            self.fc2 = nn.Linear(1024, 12)
+        self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
+        row_size -= 2
+        self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
+        row_size -= 2
+        self.heur_fc1 = nn.Linear(12, 256)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        self.batch1 = nn.BatchNorm2d(64)
+        self.batch2 = nn.BatchNorm2d(64)
+        self.batch3 = nn.BatchNorm1d(1024)
+        self.heur_batch = nn.BatchNorm1d(256)
+        self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
+        self.fc2 = nn.Linear(1024, 12)
 
-            torch.nn.init.xavier_uniform_(self.conv1.weight)
-            torch.nn.init.xavier_uniform_(self.conv2.weight)
-            torch.nn.init.xavier_uniform_(self.fc1.weight)
-            torch.nn.init.xavier_uniform_(self.fc2.weight)
-            torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
+        torch.nn.init.xavier_uniform_(self.conv2.weight)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
 
 
     def forward(self, x, x1):
-        model = int(self.model/2)
-
-        if model == 0:
-            x = self.conv1(x)
-            x = self.batch1(x)
-            x = F.relu(x)
-            x = self.conv2(x)
-            x = self.batch2(x)
-            x = F.relu(x)
-            #x = F.max_pool2d(x, 2)
-            x = self.dropout1(x)
-            x = torch.flatten(x, 1)
-            x = self.fc1(x)
-            x = F.relu(x)
-            x = self.dropout2(x)
-            x = self.fc2(x)
-            x = F.tanh(x)
-            #output = F.log_softmax(x, dim=1)
-        elif model == 1:
-            #x = torch.tensor_split(x, (7, ), dim=3)
-            #x = x[0]
-            x = self.conv1(x)
-            x = self.batch1(x)
-            x = F.leaky_relu(x)
-            x = self.conv2(x)
-            x = self.batch2(x)
-            x = F.leaky_relu(x)
-            #x = F.max_pool2d(x, 2)
-            x = self.dropout1(x)
-            x = torch.flatten(x, 1)
-            x1 = self.heur_fc1(x1)
-            x1 = self.heur_batch(x1)
-            x1 = F.leaky_relu(x1)
-            x = torch.cat((x, x1), 1)
-            x = self.fc1(x)
-            x = self.batch3(x)
-            x = F.leaky_relu(x)
-            x = self.dropout2(x)
-            x = self.fc2(x)
-            #x = torch.tanh(x)
-            #output = F.log_softmax(x, dim=1)
+        #x = torch.tensor_split(x, (7, ), dim=3)
+        #x = x[0]
+        x = self.conv1(x)
+        x = self.batch1(x)
+        x = F.leaky_relu(x)
+        x = self.conv2(x)
+        x = self.batch2(x)
+        x = F.leaky_relu(x)
+        #x = F.max_pool2d(x, 2)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x1 = self.heur_fc1(x1)
+        x1 = self.heur_batch(x1)
+        x1 = F.leaky_relu(x1)
+        x = torch.cat((x, x1), 1)
+        x = self.fc1(x)
+        x = self.batch3(x)
+        x = F.leaky_relu(x)
+        x = self.dropout2(x)
+        x = self.fc2(x)
+        #x = torch.tanh(x)
+        #output = F.log_softmax(x, dim=1)
 
         return x
 
@@ -99,7 +68,7 @@ class Net(nn.Module):
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm):
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
-    for batch_idx, (data, target, heur) in enumerate(train_loader):
+    for batch_idx, (data, heur, target) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
         
         data *= x_norm
@@ -139,7 +108,7 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para):
     l = torch.nn.MSELoss(reduction='mean')
 
     with torch.no_grad():
-        for data, target, heur in test_loader:
+        for data, heur, target in test_loader:
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
             
@@ -197,7 +166,7 @@ def main():
             print("No gpu number")
             exit(1)
 
-        cuda_kwargs = {'num_workers': 8,
+        cuda_kwargs = {'num_workers': 16,
                        'pin_memory': True,
                        'shuffle': True}
         train_kwargs.update(cuda_kwargs)
@@ -228,7 +197,7 @@ def main():
     if args.log != None:
         logfile = open(args.log, "w")
         logCSV = csv.writer(logfile)
-        logCSV.writerow(["epoch", "train loss", "test loss", "train heuristic loss", "test heuristic loss", "train mmse", "test_mmse", "train unable count", "test unable count"])
+        logCSV.writerow(["epoch", "train loss", "test loss", "train ls loss", "test ls loss", "train mmse", "test mmse", "train cos loss", "test cos loss", "train ls cos loss", "test ls cos loss", "train cos mmse", "test cos mmse", "train unable count", "test unable count"])
     else:
         logfile = None
         logCSV = None

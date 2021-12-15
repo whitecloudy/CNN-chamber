@@ -12,6 +12,7 @@ from DataProcessor import DataProcessor, global_key_list, global_data_handler
 class BeamDataset(Dataset):
     def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
         self.multiply = multiply
+        self.data_size = data_size
 
         cache_filename_list = [(str(data_size)+"_"+str(multiply)+"_"+str(i)+'_20211213.bin', ) for i in num_list]
         self.hashname = make_cache_hashname(cache_filename_list)
@@ -20,6 +21,8 @@ class BeamDataset(Dataset):
 
         for idx, filename in enumerate(cache_filename_list):
             loaded_data = load_cache(*filename)
+
+            # data will be loaded in (x, h, y)
             self.data_list.append(loaded_data)
             self.idx_list += [(idx, j) for j in range(len(loaded_data))]
             print(len(self.idx_list))
@@ -35,34 +38,34 @@ class BeamDataset(Dataset):
         x_mean = 0
         y_mean = 0
         h_mean = 0
-        for i, j in self.idx_list:
-            x_mat, h, y = self.data_list[i][j]
-            for x in x_mat:
-                x_mean += abs(np.array(x))
-            y_mean += abs(np.array(y).reshape(6, 1))
-            h_mean += abs(np.array(h).reshape(6, 1))
+        for data in self.data_list:
+            for x_mat, h, y in data:
+                for x in x_mat:
+                    x_mean += abs(np.array(x[6:8]))
+                y_mean += abs(np.array(y).reshape((1, 6)))
+                h_mean += abs(np.array(h).reshape((1, 6)))
 
-        x_mean /= len(self.idx_list)
+        x_mean /= (len(self.idx_list) * self.data_size)
+        x_mean = np.append([1. for i in range(6)], x_mean)
         y_mean /= len(self.idx_list)
         h_mean /= len(self.idx_list)
 
-        return (1/x_mean, 1/y_mean, 1/h_mean)
+        return (1/x_mean, 1/h_mean, 1/y_mean)
     
     def calculate_MMSE_parameter(self):
         H_Y_pair = []
         Y_avg_sum = 0
         H_avg_sum = 0
 
-        for i, j in self.idx_list:
-            x, h, y = self.data_list[i][j]
+        for data in self.data_list:
+            for x_mat, h, y in data:
+                Y = np.array(h).reshape((1, 6))
+                H = np.array(y).reshape((1, 6))
 
-            Y = np.array(y).reshape((1,6))
-            H = np.array(h).reshape((1,6))
+                H_Y_pair.append((H, Y))
 
-            H_Y_pair.append((H, Y))
-
-            Y_avg_sum += Y
-            H_avg_sum += H
+                Y_avg_sum += Y
+                H_avg_sum += H
 
         N = len(self.idx_list)
 
@@ -76,13 +79,14 @@ class BeamDataset(Dataset):
             y_hat = y - mu_y
             r_hy += (np.matrix(h_hat).T * np.conj(np.matrix(y_hat)))
             r_yy += (np.matrix(y_hat).T * np.conj(np.matrix(y_hat)))
-        print(r_hy.shape)
 
         r_hy /= len(H_Y_pair)
         r_yy /= len(H_Y_pair)
 
         r_yy_inv = r_yy.getI()
         mmse = r_hy * r_yy_inv
+
+        print(mmse.shape)
 
         return mmse
 
@@ -92,7 +96,7 @@ class BeamDataset(Dataset):
             cache_name = self.hashname + '.norm'
             self.normalize = load_cache(cache_name)
             if self.normalize is None:
-                x, y, h = self.calculate_normalize()
+                x, h, y = self.calculate_normalize()
                 self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
                 save_cache(self.normalize, cache_name)
 
@@ -110,21 +114,21 @@ class BeamDataset(Dataset):
         return self.MMSE_para
 
     def __len__(self):
-        return int(len(self.idx_list)/self.multiply)
+        return int(len(self.idx_list)/self.multiply/4)
 
     def __getitem__(self, idx):
         i, j = self.idx_list[idx]
-        x, y, h = self.data_list[i][j]
+        x, h, y = self.data_list[i][j]
 
         x = torch.FloatTensor([x.real, x.imag])
         y = torch.FloatTensor([y.real, y.imag]).reshape(12,)
         h = torch.FloatTensor([h.real, h.imag]).reshape(12,)
 
-        return x, y, h
+        return x, h, y
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=3, data_div=5, val_data_num=1, row_size=6):
+    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6):
         self.multiply = multiply
         self.data_div = data_div
         self.val_data_num = val_data_num

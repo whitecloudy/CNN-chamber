@@ -179,7 +179,15 @@ class DataProcessor:
                     data_c = dataParser(x_data, l, k)
 
                     if data_c.check_rank():
-                        result_list.append((data_c.x_data(), data_c.heur_data(), data_c.y_data()))
+                        try:
+                            result_list.append((data_c.x_data(), data_c.heur_data(), data_c.y_data()))
+                        except np.linalg.LinAlgError:
+                            print("LinAlg Error")
+                            continue
+                        except NameError:
+                            print("Name Error")
+                            continue
+
                     else:
                         continue
 
@@ -192,7 +200,7 @@ def main():
     error_thres = 0.15
     data_div = 10
     seed = 1
-    multiply = 3
+    multiply = 1
 
     for key in key_list:
         error, length = global_data_handler.evalLabel(key)

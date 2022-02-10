@@ -99,7 +99,6 @@ class DataProcessor:
         self.multiply = 0
         para_tuples = []
 
-
         # data augmentation
         for data, label, key in self.data_handler:
             if key[0:3] not in self.key_list:
@@ -230,7 +229,7 @@ def main():
         for row_size in range(6, 13):
             print("<<<", i, " ", row_size, ">>>")
             data_list = datas.prepare_data(multiply=multiply, row_size=row_size)
-            filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20211213.bin'
+            filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220113.bin'
             save_cache(data_list, filename)
 
 

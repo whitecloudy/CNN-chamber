@@ -59,6 +59,8 @@ class DataHandler:
                             first = False
                             continue
                         member = dataParser.from_row_filename(row, filename)
+                        if member.tag_sig == 0.0:
+                            continue
 
                         if member.data_kind in tmp_dict:
                             tmp_dict[member.data_kind].append(member)

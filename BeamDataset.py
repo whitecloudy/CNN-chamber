@@ -14,7 +14,7 @@ class BeamDataset(Dataset):
         self.multiply = multiply
         self.data_size = data_size
 
-        cache_filename_list = [(str(data_size)+"_"+str(multiply)+"_"+str(i)+'_20211213.bin', ) for i in num_list]
+        cache_filename_list = [(str(data_size)+"_"+str(multiply)+"_"+str(i)+'_20220113.bin', ) for i in num_list]
         self.hashname = make_cache_hashname(cache_filename_list)
         self.data_list = []
         self.idx_list = []
@@ -89,7 +89,6 @@ class BeamDataset(Dataset):
         print(mmse.shape)
 
         return mmse
-
 
     def getNormPara(self):
         if self.normalize is None:

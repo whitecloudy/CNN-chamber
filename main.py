@@ -10,9 +10,12 @@ from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
+
 import numpy as np
 import csv
 import copy
+from CachefileHandler import save_cache, load_cache
+from DataExchanger import DataExchanger
 
 class Net(nn.Module):
     def __init__(self, model, row_size):
@@ -142,33 +145,22 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para):
     test_mmse_cos_loss /= len(test_loader)
 
     print('\nAverage loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
-        test_loss, test_heur_loss, test_mmse_loss, test_unable_heur*100))
+        test_loss*1000000, test_heur_loss*1000000, test_mmse_loss*1000000, test_unable_heur*100))
 
     return float(test_loss), float(test_heur_loss), float(test_mmse_loss), float(test_cos_loss), float(test_heur_cos_loss), float(test_mmse_cos_loss), test_unable_heur
 
 
-def main():
-    ArgsHandler.init_args()
-    args = ArgsHandler.args
-
+def training_model(args, model, device):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-
-    torch.manual_seed(args.seed)
-
-    device = torch.device("cuda" if use_cuda else "cpu")
 
     train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
-    if use_cuda:
-        if torch.cuda.device_count() >= (args.gpunum-1):
-            torch.cuda.set_device(args.gpunum)
-        else:
-            print("No gpu number")
-            exit(1)
 
-        cuda_kwargs = {'num_workers': 16,
+    if use_cuda:
+        cuda_kwargs = {'num_workers': 4,
                        'pin_memory': True,
                        'shuffle': True}
+
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
@@ -179,23 +171,25 @@ def main():
     test_dataset = dataset_handler.test_dataset
     print("Test Dataset : ", len(test_dataset))
 
-    model = Net(args.model, args.W).to(device)
-    #print(summary(model))
-    
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    x_norm_vector, y_norm_vector = training_dataset.getNormPara()
-    x_norm_vector = x_norm_vector.to(device)
-    y_norm_vector = y_norm_vector.to(device)
+    # Load Normalization
+    norm_vector = load_cache(args.log + '.norm')
+    if norm_vector is None:
+        norm_vector = training_dataset.getNormPara()
+        save_cache(norm_vector, args.log + '.norm')
+
+    x_norm_vector = norm_vector[0].to(device)
+    y_norm_vector = norm_vector[1].to(device)
 
     mmse_para = training_dataset.getMMSEpara().to(device)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
 
-    if args.log != None:
-        logfile = open(args.log, "w")
+    if args.log is not None:
+        logfile = open(args.log+'.csv', "w")
         logCSV = csv.writer(logfile)
         logCSV.writerow(["epoch", "train loss", "test loss", "train ls loss", "test ls loss", "train mmse", "test mmse", "train cos loss", "test cos loss", "train ls cos loss", "test ls cos loss", "train cos mmse", "test cos mmse", "train unable count", "test unable count"])
     else:
@@ -233,11 +227,90 @@ def main():
         train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
         test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
+        if args.dry_run:
+            break
+
     if logfile is not None:
         logfile.close()
 
+    from pathlib import Path
+
     if args.save_model:
-        torch.save(opt_model_para, args.log+'.pt')
+        torch.save(opt_model_para, str(Path.home())+"/cache/"+args.log+'.pt')
+
+
+def inference(model, device, x_data, heur_data, x_norm, y_norm):
+    x_data = x_data.to(device)
+    heur_data = heur_data.to(device)
+
+    x_data *= x_norm
+    heur_data *= y_norm
+
+    output = model(x_data[None, ...], heur_data[None, ...])
+
+    output /= y_norm
+    heur_data /= y_norm
+
+    output = output.to('cpu').detach().numpy().reshape((12))
+    output = output[0:6] + output[6:12]*1j
+
+    heur_data = heur_data.to('cpu').detach().numpy()
+    heur_data = heur_data[0:6] + heur_data[6:12]*1j
+
+    return output, heur_data
+
+
+def testing_model(args, model, device):
+    # Loading model parameter
+    with open(args.test+'.pt','rb') as pt_file:
+        model.load_state_dict(torch.load(pt_file, map_location=device))
+
+    model.eval()
+    x_norm_vector, y_norm_vector = load_cache(args.test+'.norm')
+    x_norm_vector = x_norm_vector.to(device)
+    y_norm_vector = y_norm_vector.to(device)
+
+    data_exchanger = DataExchanger()
+
+    row_size = args.W
+
+    print("Ready")
+
+    while True:
+        x_data, heur_data = data_exchanger.recv_data(row_size)
+        if x_data is None:
+            break
+        
+        result, heur_data = inference(model, device, x_data, heur_data, x_norm_vector, y_norm_vector)
+
+        data_exchanger.send_channel(result)
+        data_exchanger.send_channel(heur_data)
+
+
+def main():
+    ArgsHandler.init_args()
+    args = ArgsHandler.args
+
+    use_cuda = not args.no_cuda and torch.cuda.is_available()
+
+    torch.manual_seed(args.seed)
+
+    device = torch.device("cuda" if use_cuda else "cpu")
+
+    if use_cuda:
+        if torch.cuda.device_count() >= (args.gpunum-1):
+            torch.cuda.set_device(args.gpunum)
+        else:
+            print("No gpu number")
+            exit(1)
+
+    model = Net(args.model, args.W).to(device)
+
+    if args.test is None:
+        training_model(args, model, device)
+    else:
+        testing_model(args, model, device)
+
 
 
 if __name__ == '__main__':

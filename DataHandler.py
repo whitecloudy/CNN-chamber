@@ -46,9 +46,11 @@ class DataHandler:
     def __init__(self):
         filelist = glob.glob(DATADIR)
         self.data_dict = {}
+        self.nosub_data_dict = {}
         self.opt_data_dict = {}
 
         for filename in filelist:
+            print("Loading : ", filename)
             try:
                 with open(filename, "r") as log_file:
                     log_reader = csv.reader(log_file)
@@ -70,12 +72,16 @@ class DataHandler:
                     tmp_dict[kind] = sorted(tmp_dict[kind], key=lambda x: x.round_num)
                     if filename.find("opt") != -1:
                         self.opt_data_dict[kind] = tmp_dict[kind]
+                    elif filename.find("nosub") != -1:
+                        new_kind = (filename[0:filename.find("nosub")], )+kind[1:]
+                        self.nosub_data_dict[new_kind] = tmp_dict[kind]
                     else:
-                        self.data_dict[kind] = tmp_dict[kind]
+                        new_kind = (filename[0:filename.find("result")], )+kind[1:]
+                        self.data_dict[new_kind] = tmp_dict[kind]
             except IsADirectoryError:
                 pass
 
-        self.key_list = list(sorted(self.data_dict.keys()))
+        self.key_list = list(sorted(self.nosub_data_dict.keys()))
 
     def getKey(self):
         return self.data_dict.keys()
@@ -84,7 +90,7 @@ class DataHandler:
         W = []
         A = []
 
-        for data in self.data_dict[key]:
+        for data in self.nosub_data_dict[key]:
             W.append(data.phase_vec)
             A.append([data.tag_sig])
         

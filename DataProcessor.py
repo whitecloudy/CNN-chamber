@@ -152,8 +152,10 @@ class DataProcessor:
         gc.collect()
 
         self.index_len = 0
-
-        result_list = []
+        
+        x_result = []#np.empty((0, row_size, 8))
+        y_result = []#np.empty((0, 6, 1))
+        h_result = []#np.empty((0, 6))
         for idx, dlk in enumerate(self.data_label_key_list):
             d = dlk[0]
             l = dlk[1]
@@ -179,7 +181,9 @@ class DataProcessor:
 
                     if data_c.check_rank():
                         try:
-                            result_list.append((data_c.x_data(), data_c.heur_data(), data_c.y_data()))
+                            x_result.append(data_c.x_data())
+                            y_result.append(data_c.y_data())
+                            h_result.append(data_c.heur_data())
                         except np.linalg.LinAlgError:
                             print("LinAlg Error")
                             continue
@@ -189,23 +193,41 @@ class DataProcessor:
 
                     else:
                         continue
+        x_result = np.array(x_result)
+        h_result = np.array(h_result)
+        y_result = np.array(y_result)
 
-        return result_list
+        return x_result, h_result, y_result
+
+def work_for_preparing(data_c, i, multiply, row_size):
+    print("<<<", i, " ", row_size, ">>>")
+    data_list = data_c.prepare_data(multiply=multiply, row_size=row_size)
+    filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325.bin'
+    save_cache(data_list, filename)
+    print("Done ", i, " ", row_size)
+
+    return [0, ]
 
 
 def main():
     key_list = global_key_list
     trainable_key_list = []
-    error_thres = 0.15
-    data_div = 10
+    error_thres = 0.40
+    data_div = 40
     seed = 1
     multiply = 1
 
     for key in key_list:
-        error, length = global_data_handler.evalLabel(key)
-        if length >= 54:
+        try:
+            error, length = global_data_handler.evalLabel(key)
+        except KeyError:
+            print(key, " : It is not Usable")
+            continue
+        if length >= 250:
             if error < error_thres:
                 trainable_key_list.append(key[0:3])
+            else:
+                print(key, " is Too much Error : ", error)
     print(len(trainable_key_list))
     
     random.seed(seed)
@@ -218,19 +240,36 @@ def main():
     start_idx = 0
     end_idx = 0
 
-    for i in range(data_div):
+    for i in range(0, data_div, 2):
+        print("\nNow working!!")
+        print(i)
+        print()
         start_idx = end_idx
         end_idx += key_step_len
         if key_remain > 0:
             key_remain -= 1
             end_idx += 1
-        step_key = trainable_key_list[start_idx: end_idx]
-        datas = DataProcessor(key_list=step_key)
-        for row_size in range(6, 13):
-            print("<<<", i, " ", row_size, ">>>")
-            data_list = datas.prepare_data(multiply=multiply, row_size=row_size)
-            filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220113.bin'
-            save_cache(data_list, filename)
+        step_key1 = trainable_key_list[start_idx: end_idx]
+
+        start_idx = end_idx
+        end_idx += key_step_len
+        if key_remain > 0:
+            key_remain -= 1
+            end_idx += 1
+        step_key2 = trainable_key_list[start_idx: end_idx]
+
+        if True:
+            data1 = DataProcessor(key_list=step_key1)
+            data2 = DataProcessor(key_list=step_key2)
+
+            para_tuples = []
+            for row_size in range(6, 13):
+                para_tuples.append((data1, i, multiply, row_size))
+
+            for row_size in range(6, 13):
+                para_tuples.append((data2, i+1, multiply, row_size))
+
+            do_work(work_for_preparing, para_tuples, 16)
 
 
 if __name__ == "__main__":

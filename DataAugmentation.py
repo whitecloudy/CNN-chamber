@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from DataHandler import dataParser
 
-aug_para = (4, 4, 4)
+aug_para = (3, 3, 4)
 
 def data_augmentation(data, label, key):
     result_list = [(data, label, key)]

@@ -87,7 +87,7 @@ class Net_withoutRow(nn.Module):
     def forward(self, x, x1):
         #x = torch.tensor_split(x, (7, ), dim=3)
         #x = x[0]
-        x = self.heur_fc1(x)
+        x = self.heur_fc1(x1)
         x = self.heur_batch(x)
         x = F.leaky_relu(x)
         x = self.fc1(x)
@@ -154,30 +154,29 @@ def train(args, models, device, train_loader, optimizers, epoch, x_norm, y_norm,
         target *= y_norm
         heur *= y_norm
 
+        printing_loss = None
+
         for optimizer in optimizers:
             optimizer.zero_grad()
 
-        outputs = []
-        for model in models:
-            outputs.append(model(data, heur))
-
-        losses = []
-        for output in outputs:
+        for i, model in enumerate(models):
+            output = model(data, heur)
             loss = l(output, target)
-            #loss = cos_loss(output, target)
+
+            loss.backward()
+
             if torch.isnan(loss).any() or torch.isinf(loss).any():
                 assert False, "Nan is detected"
 
-            losses.append(loss)
-            loss.backward()
-         
-        for optimizer in optimizers:
-            optimizer.step()
+            optimizers[i].step()
+
+            if i == 0:
+                printing_loss = loss
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), losses[0].item()))
+                100. * batch_idx / len(train_loader), printing_loss.item()))
         if args.dry_run:
             break
 
@@ -185,13 +184,13 @@ def train(args, models, device, train_loader, optimizers, epoch, x_norm, y_norm,
 def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
     for model in models:
         model.eval()
-    test_loss = [0.0 for i in range(len(models))]
-    test_heur_loss = 0.0
-    test_mmse_loss = 0.0
+    test_loss = torch.tensor([0.0 for i in range(len(models))]).to(device)
+    test_heur_loss = torch.tensor(0.0).to(device)
+    test_mmse_loss = torch.tensor(0.0).to(device)
 
-    test_cos_loss = [0.0 for i in range(len(models))]
-    test_heur_cos_loss = 0
-    test_mmse_cos_loss = 0
+    test_cos_loss = torch.tensor([0.0 for i in range(len(models))]).to(device)
+    test_heur_cos_loss = torch.tensor(0.0).to(device)
+    test_mmse_cos_loss = torch.tensor(0.0).to(device)
 
     test_unable_heur = 0
 
@@ -203,29 +202,33 @@ def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False)
             heur = heur.to(device)
             
             data *= x_norm
-            target *= y_norm
             heur *= y_norm
 
-            outputs = []
-            for model in models:
+            for i, model in enumerate(models):
                 output = model(data, heur)
                 output /= y_norm
-                outputs.append(output)
-            target /= y_norm
+
+                test_loss[i] += l(output, target)
+                test_cos_loss[i] += cos_loss(output, target)
+
             heur /= y_norm
             
             mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
             mmse = torch.cat((mmse.real, mmse.imag), 1)
             
-            for i, output in enumerate(outputs):
-                test_loss[i] += l(output, target)
-                test_cos_loss[i] += cos_loss(output, target)
-
             test_heur_loss += l(heur, target)
             test_mmse_loss += l(mmse, target)
 
             test_heur_cos_loss += cos_loss(heur, target)
             test_mmse_cos_loss += cos_loss(mmse, target)
+
+    test_loss = test_loss.cpu().tolist()
+    test_heur_loss = test_heur_loss.cpu()
+    test_mmse_loss = test_mmse_loss.cpu()
+
+    test_cos_loss = test_cos_loss.cpu().tolist()
+    test_heur_cos_loss = test_heur_cos_loss.cpu()
+    test_mmse_cos_loss = test_mmse_cos_loss.cpu()
     
     for i in range(len(test_loss)):
         test_loss[i] /= len(test_loader)
@@ -249,13 +252,13 @@ def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False)
 def training_model(args, models, device, val_data_num, do_print=False):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
-    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
+    train_kwargs = {'batch_size': args.batch_size, 'shuffle': False}
+    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': False}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 32,
+        cuda_kwargs = {'num_workers': 16,
                        'pin_memory': True,
-                       'shuffle': True}
+                       'shuffle': False}
 
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
@@ -309,7 +312,7 @@ def training_model(args, models, device, val_data_num, do_print=False):
     for epoch in range(1, args.epochs + 1):
         train(args, models, device, train_loader, optimizers, epoch, x_norm_vector, y_norm_vector, do_print)
         
-        for model in models:
+        for idx_m, model in enumerate(models):
             if do_print:
                 print("<< Test Loader >>")
             test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(models, device, test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
@@ -400,15 +403,6 @@ def testing_model(args, model, device):
         data_exchanger.send_channel(heur_data)
 
 
-def training_worker(recv):
-    args, device, i = recv
-    model = Net(args.W).to(device)
-    if i == 0:
-        training_model(args, [model, ], device, i, True)
-    else:
-        training_model(args, [model, ], device, i, False)
-
-
 def main():
     ArgsHandler.init_args()
     args = ArgsHandler.args
@@ -439,8 +433,10 @@ def main():
         with multi.Pool(args.data_div) as p:
             p.map(training_worker, args_list)
         """
-        model = Net(args.W).to(device)
-        training_model(args, [model, ], device, args.val_data_num, True)
+        model1 = Net(args.W).to(device)
+        model2 = Net_withoutLS(args.W).to(device)
+        model3 = Net_withoutRow(args.W).to(device)
+        training_model(args, [model1, model2, model3], device, args.val_data_num, True)
     else:
         model = Net(args.W).to(device)
         testing_model(args, model, device)

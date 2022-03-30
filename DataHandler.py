@@ -28,7 +28,7 @@ class dataParser:
         data_kind = (filename, row[6], row[7], row[8], row[9])
         round_num = int(row[10])
         noise_std = complex(float(row[11]), float(row[12]))
-        tag_sig = complex(-float(row[13]), -float(row[14]))
+        tag_sig = complex(float(row[13]), float(row[14]))
 
         return cls(phase_vec, data_kind, round_num, noise_std, tag_sig)
 

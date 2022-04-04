@@ -143,10 +143,10 @@ class Net_withoutLS(nn.Module):
 
 
 
-def train(args, models, device, train_loader, optimizers, epoch, x_norm, y_norm, do_print=False):
-    for model in models:
-        model.train()
+def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
+    model.train()
     l = torch.nn.MSELoss(reduction='mean')
+
     for batch_idx, (data, heur, target) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
         
@@ -154,48 +154,40 @@ def train(args, models, device, train_loader, optimizers, epoch, x_norm, y_norm,
         target *= y_norm
         heur *= y_norm
 
-        printing_loss = None
+        optimizer.zero_grad()
 
-        for optimizer in optimizers:
-            optimizer.zero_grad()
+        output = model(data, heur)
+        loss = l(output, target)
 
-        for i, model in enumerate(models):
-            output = model(data, heur)
-            loss = l(output, target)
+        loss.backward()
 
-            loss.backward()
+        #if torch.isnan(loss).any() or torch.isinf(loss).any():
+        #    assert False, "Nan is detected"
 
-            if torch.isnan(loss).any() or torch.isinf(loss).any():
-                assert False, "Nan is detected"
-
-            optimizers[i].step()
-
-            if i == 0:
-                printing_loss = loss
+        optimizer.step()
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), printing_loss.item()))
+                100. * batch_idx / len(train_loader), loss.item()))
         if args.dry_run:
             break
 
 
-def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
-    for model in models:
-        model.eval()
-    test_loss = torch.tensor([0.0 for i in range(len(models))]).to(device)
-    test_heur_loss = torch.tensor(0.0).to(device)
-    test_mmse_loss = torch.tensor(0.0).to(device)
+def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
+    model.eval()
+    test_loss = torch.tensor(0.0, device=device)
+    test_heur_loss = torch.tensor(0.0, device=device)
+    test_mmse_loss = torch.tensor(0.0, device=device)
 
-    test_cos_loss = torch.tensor([0.0 for i in range(len(models))]).to(device)
-    test_heur_cos_loss = torch.tensor(0.0).to(device)
-    test_mmse_cos_loss = torch.tensor(0.0).to(device)
+    test_cos_loss = torch.tensor(0.0, device=device)
+    test_heur_cos_loss = torch.tensor(0.0, device=device)
+    test_mmse_cos_loss = torch.tensor(0.0, device=device)
 
     test_unable_heur = 0
 
     l = torch.nn.MSELoss(reduction='mean')
-
+    
     with torch.no_grad():
         for data, heur, target in test_loader:
             data, target = data.to(device), target.to(device)
@@ -204,12 +196,11 @@ def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False)
             data *= x_norm
             heur *= y_norm
 
-            for i, model in enumerate(models):
-                output = model(data, heur)
-                output /= y_norm
+            output = model(data, heur)
+            output /= y_norm
 
-                test_loss[i] += l(output, target)
-                test_cos_loss[i] += cos_loss(output, target)
+            test_loss += l(output, target)
+            test_cos_loss += cos_loss(output, target)
 
             heur /= y_norm
             
@@ -222,19 +213,18 @@ def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False)
             test_heur_cos_loss += cos_loss(heur, target)
             test_mmse_cos_loss += cos_loss(mmse, target)
 
-    test_loss = test_loss.cpu().tolist()
+    test_loss = test_loss.cpu()
     test_heur_loss = test_heur_loss.cpu()
     test_mmse_loss = test_mmse_loss.cpu()
 
-    test_cos_loss = test_cos_loss.cpu().tolist()
+    test_cos_loss = test_cos_loss.cpu()
     test_heur_cos_loss = test_heur_cos_loss.cpu()
     test_mmse_cos_loss = test_mmse_cos_loss.cpu()
     
-    for i in range(len(test_loss)):
-        test_loss[i] /= len(test_loader)
-        test_loss[i] = float(test_loss[i])
-        test_cos_loss[i] /= len(test_loader)
-        test_cos_loss[i] = float(test_cos_loss[i])
+    test_loss /= len(test_loader)
+    test_loss = float(test_loss)
+    test_cos_loss /= len(test_loader)
+    test_cos_loss = float(test_cos_loss)
 
     test_heur_loss /= len(test_loader)
     test_mmse_loss /= len(test_loader)
@@ -244,19 +234,19 @@ def test(models, device, test_loader, x_norm, y_norm, mmse_para, do_print=False)
 
     if do_print:
         print('\nAverage loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
-            test_loss[0]*1000000, test_heur_loss*1000000, test_mmse_loss*1000000, test_unable_heur*100))
+            test_loss*1000000, test_heur_loss*1000000, test_mmse_loss*1000000, test_unable_heur*100))
 
     return test_loss, float(test_heur_loss), float(test_mmse_loss), test_cos_loss, float(test_heur_cos_loss), float(test_mmse_cos_loss), test_unable_heur
 
 
-def training_model(args, models, device, val_data_num, do_print=False):
+def training_model(args, model, device, val_data_num, do_print=False):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     train_kwargs = {'batch_size': args.batch_size, 'shuffle': False}
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': False}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 16,
+        cuda_kwargs = {'num_workers': 4,
                        'pin_memory': True,
                        'shuffle': False}
 
@@ -274,10 +264,8 @@ def training_model(args, models, device, val_data_num, do_print=False):
 
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-
-    optimizers = []
-    for m in models:
-        optimizers.append(optim.Adam(m.parameters(), lr=args.lr))
+    
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # Load Normalization
     norm_vector = load_cache(args.log + '.norm')
@@ -290,50 +278,41 @@ def training_model(args, models, device, val_data_num, do_print=False):
 
     mmse_para = training_dataset.getMMSEpara().to(device)
 
-    schedulers = []
-    for opt in optimizers:
-        schedulers.append(StepLR(opt, step_size=1, gamma=args.gamma))
-    logCSVs = None
+    scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    logCSV = None
     if args.log is not None:
-        logCSVs = []
-        for i in range(len(models)):
-            logfile = open(args.log+"_"+str(i)+'.csv', "w")
+        logfile = open(args.log+'.csv', "w")
 
-            logCSV = csv.writer(logfile)
-            logCSV.writerow(["epoch", "train loss", "test loss", "train ls loss", "test ls loss", "train mmse", "test mmse", "train cos loss", "test cos loss", "train ls cos loss", "test ls cos loss", "train cos mmse", "test cos mmse", "train unable count", "test unable count"])
-            logCSVs.append(logCSV)
+        logCSV = csv.writer(logfile)
+        logCSV.writerow(["epoch", "train loss", "test loss", "train ls loss", "test ls loss", "train mmse", "test mmse", "train cos loss", "test cos loss", "train ls cos loss", "test ls cos loss", "train cos mmse", "test cos mmse", "train unable count", "test unable count"])
     else:
         logfile = None
-        logCSVs = None
     
     min_loss = float('inf')
     opt_model_para = None
 
     for epoch in range(1, args.epochs + 1):
-        train(args, models, device, train_loader, optimizers, epoch, x_norm_vector, y_norm_vector, do_print)
+        train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector, do_print)
         
-        for idx_m, model in enumerate(models):
-            if do_print:
-                print("<< Test Loader >>")
-            test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(models, device, test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+        if do_print:
+            print("<< Test Loader >>")
+        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
-            if do_print:
-                print("<< Train Loader >>")
-            train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(models, device, train_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+        if do_print:
+            print("<< Train Loader >>")
+        train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
-            if logCSVs is not None:
-                for i, logCSV in enumerate(logCSVs):
-                    logCSV.writerow([epoch, train_loss[i], test_loss[i], train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss[i], test_cos_loss[i], train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
+        if logCSV is not None:
+            logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
 
-        for sched in schedulers:
-            sched.step()
+        scheduler.step()
 
         if epoch is args.epochs:
             break
 
-        if args.save_model and min_loss > test_cos_loss[0]:
-            min_loss = test_cos_loss[0]
-            opt_model_para = copy.deepcopy(models[0].state_dict())
+        if args.save_model and min_loss > test_cos_loss:
+            min_loss = test_cos_loss
+            opt_model_para = copy.deepcopy(model.state_dict())
 
         # renew dataset
         dataset_handler.renew_dataset()
@@ -411,14 +390,16 @@ def main():
 
     torch.manual_seed(args.seed)
 
-    device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device("cuda:"+str(args.gpunum) if use_cuda else "cpu")
 
+    """
     if use_cuda:
         if torch.cuda.device_count() >= (args.gpunum-1):
             torch.cuda.set_device(args.gpunum)
         else:
             print("No gpu number")
             exit(1)
+    """
 
     #model_withoutRow = Net_withoutRow(args.W).to(device)
     #model_withoutLS = Net_withoutLS(args.W).to(device)
@@ -433,10 +414,10 @@ def main():
         with multi.Pool(args.data_div) as p:
             p.map(training_worker, args_list)
         """
-        model1 = Net(args.W).to(device)
+        #model1 = Net(args.W).to(device)
         model2 = Net_withoutLS(args.W).to(device)
-        model3 = Net_withoutRow(args.W).to(device)
-        training_model(args, [model1, model2, model3], device, args.val_data_num, True)
+        #model3 = Net_withoutRow(args.W).to(device)
+        training_model(args, model2, device, args.val_data_num, True)
     else:
         model = Net(args.W).to(device)
         testing_model(args, model, device)

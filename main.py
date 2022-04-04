@@ -242,13 +242,13 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
 def training_model(args, model, device, val_data_num, do_print=False):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    train_kwargs = {'batch_size': args.batch_size, 'shuffle': False}
-    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': False}
+    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
+    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 4,
+        cuda_kwargs = {'num_workers': 8,
                        'pin_memory': True,
-                       'shuffle': False}
+                       'shuffle': True}
 
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
@@ -315,7 +315,6 @@ def training_model(args, model, device, val_data_num, do_print=False):
             opt_model_para = copy.deepcopy(model.state_dict())
 
         # renew dataset
-        dataset_handler.renew_dataset()
         training_dataset = dataset_handler.training_dataset
         test_dataset = dataset_handler.test_dataset
         

@@ -33,20 +33,18 @@ class BeamDataset(Dataset):
         cache_filename_list = [(data_filename[i], ) for i in num_list]
         self.hashname = make_cache_hashname(cache_filename_list)
         self.data_list = []
-        self.idx_list = []
+        self.len_list = []
+        self.total_len = 0
 
         for i, idx in enumerate(num_list):
             # data will be loaded in (x, h, y)
             self.data_list.append(data_segments[idx])
-            self.idx_list += [(i, j) for j in range(len(data_segments[idx][0]))]
-            print(len(self.idx_list))
+            self.len_list.append(len(data_segments[idx][0]))
+            self.total_len += self.len_list[i]
+            print(self.len_list[i])
 
         self.MMSE_para = MMSE_para
         self.normalize = normalize
-        self.renew_data()
-
-    def renew_data(self):
-        random.shuffle(self.idx_list)
 
     def calculate_normalize(self):
         x_mean = 0
@@ -122,11 +120,20 @@ class BeamDataset(Dataset):
         return self.MMSE_para
 
     def __len__(self):
-        return int(len(self.idx_list)/self.multiply/20)
+        return int(self.total_len/self.multiply/20)
 
     def __getitem__(self, idx):
-        i, j = self.idx_list[idx]
-        #x, h, y = self.data_list[i][j]
+        i = 0
+        j = 0
+        while True:
+            length = self.len_list[i]
+            if idx < length: 
+                j = idx
+                break
+            else:
+                idx -= length
+                i += 1
+
         x = self.data_list[i][0][j]
         h = self.data_list[i][1][j]
         y = self.data_list[i][2][j]
@@ -169,10 +176,6 @@ class DatasetHandler:
         self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
-
-    def renew_dataset(self):
-        self.training_dataset.renew_data()
-        self.test_dataset.renew_data()
 
 
 def main():

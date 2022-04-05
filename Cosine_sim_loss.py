@@ -7,26 +7,43 @@ def make_complex(x):
     return complex_x
 
 
-def complex_cosine_sim_loss(x1, x2):
-    x1_c = make_complex(x1)
-    x2_c = make_complex(x2)
-
-    #print(x1_c[0])
-    #print(x2_c[0])
+def cosine_sim(x1_c, x2_c, dim=1):
     dot_pro = x1_c * x2_c.conj()
-
-    #print(dot_pro[0])
 
     x1_abs = abs(x1_c)
     x2_abs = abs(x2_c)
 
     cos_sim = dot_pro/(x1_abs * x2_abs)
 
-    return 1 - abs(torch.mean(cos_sim))
+    return abs(torch.mean(cos_sim, dim=dim))
+
+
+def MSE(x1, x2, dim=1):
+    error = x1 - x2
+    return torch.mean(error * error, dim=dim)
+
+
+def complex_cosine_sim_loss(x1, x2):
+    x1_c = make_complex(x1)
+    x2_c = make_complex(x2)
+
+    cos_sim = cosine_sim(x1_c, x2_c)
+
+    return torch.mean(1 - cos_sim)
+
+
+def cos_mse_mix_loss(x1, x2):
+    x1_c = make_complex(x1)
+    x2_c = make_complex(x2)
+    
+    cos_sim = 1 - cosine_sim(x1_c, x2_c)
+    mse = MSE(x1, x2)
+    
+    return torch.mean(cos_sim * mse)
+
 
 if __name__=="__main__":
-    x1 = torch.randn(6, 12)
-    x2 = torch.randn(6, 12)
+    x1 = torch.randn(1000, 12)
+    x2 = torch.randn(1000, 12)
 
     print(complex_cosine_sim_loss(x1, x2))
-    print(complex_cosine_sim_loss(x1, 5*x2))

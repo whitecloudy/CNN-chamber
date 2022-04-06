@@ -120,7 +120,7 @@ class BeamDataset(Dataset):
         return self.MMSE_para
 
     def __len__(self):
-        return int(self.total_len/self.multiply/20)
+        return int(self.total_len)
 
     def __getitem__(self, idx):
         i = 0
@@ -143,7 +143,6 @@ class BeamDataset(Dataset):
         h = torch.FloatTensor([h.real, h.imag]).reshape(12,)
 
         return x, h, y
-
 
 
 class DatasetHandler:

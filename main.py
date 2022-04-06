@@ -147,6 +147,8 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
 
+    batch_len = int(len(train_loader)/20)
+
     for batch_idx, (data, heur, target) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
         
@@ -168,9 +170,12 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
+                epoch, batch_idx * len(data), batch_len * len(data),
+                100. * batch_idx / batch_len, loss.item()))
         if args.dry_run:
+            break
+
+        if batch_len <= batch_idx:
             break
 
 
@@ -186,10 +191,12 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
 
     test_unable_heur = 0
 
+    batch_len = len(test_loader)/10
+
     l = torch.nn.MSELoss(reduction='mean')
     
     with torch.no_grad():
-        for data, heur, target in test_loader:
+        for batch_idx, (data, heur, target) in enumerate(test_loader):
             data, target = data.to(device), target.to(device)
             heur = heur.to(device)
             
@@ -213,6 +220,9 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
             test_heur_cos_loss += cos_loss(heur, target)
             test_mmse_cos_loss += cos_loss(mmse, target)
 
+            if batch_len <= batch_idx:
+                break
+
     test_loss = test_loss.cpu()
     test_heur_loss = test_heur_loss.cpu()
     test_mmse_loss = test_mmse_loss.cpu()
@@ -221,16 +231,16 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
     test_heur_cos_loss = test_heur_cos_loss.cpu()
     test_mmse_cos_loss = test_mmse_cos_loss.cpu()
     
-    test_loss /= len(test_loader)
+    test_loss /= batch_len
     test_loss = float(test_loss)
-    test_cos_loss /= len(test_loader)
+    test_cos_loss /= batch_len
     test_cos_loss = float(test_cos_loss)
 
-    test_heur_loss /= len(test_loader)
-    test_mmse_loss /= len(test_loader)
+    test_heur_loss /= batch_len
+    test_mmse_loss /= batch_len
 
-    test_heur_cos_loss /= len(test_loader)
-    test_mmse_cos_loss /= len(test_loader)
+    test_heur_cos_loss /= batch_len
+    test_mmse_cos_loss /= batch_len
 
     if do_print:
         print('\nAverage loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(
@@ -247,8 +257,8 @@ def training_model(args, model, device, val_data_num, do_print=False):
 
     if use_cuda:
         cuda_kwargs = {'num_workers': 8,
-                       'pin_memory': True,
-                       'shuffle': True}
+                       'pin_memory': True, 
+                       'persistent_workers': True}
 
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)

@@ -23,6 +23,8 @@ def prepare_dataset(row_size, multiply):
         data_filename.append(filename)
         data_segments.append(loaded_data)
         print(len(data_filename))
+        if i==4:
+            break
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
@@ -55,10 +57,10 @@ class BeamDataset(Dataset):
             y_mean += np.sum(abs(y), axis=0).reshape((1, 6))
             h_mean += np.sum(abs(h), axis=0).reshape((1, 6))
 
-        x_mean /= (len(self.idx_list) * self.data_size)
+        x_mean /= (self.total_len * self.data_size)
         x_mean = np.append([1. for i in range(6)], x_mean)
-        y_mean /= len(self.idx_list)
-        h_mean /= len(self.idx_list)
+        y_mean /= self.total_len
+        h_mean /= self.total_len
 
         return (1/x_mean, 1/h_mean, 1/y_mean)
  
@@ -71,7 +73,7 @@ class BeamDataset(Dataset):
             Y_avg_sum += np.sum(h_list, axis=0).reshape((1, 6))
             H_avg_sum += np.sum(y_list, axis=0).reshape((1, 6))
 
-        N = len(self.idx_list)
+        N = self.total_len
 
         mu_y = Y_avg_sum / N
         mu_h = H_avg_sum / N
@@ -164,6 +166,7 @@ class DatasetHandler:
         nums_for_training = []
         nums_for_validation = []
 
+        """
         for i in range(data_div):
             step_num_list = list(range(int(i * total_div_len/data_div), int((i+1) * total_div_len/data_div)))
 
@@ -171,6 +174,9 @@ class DatasetHandler:
                 nums_for_validation += step_num_list
             else:
                 nums_for_training += step_num_list
+        """
+        nums_for_validation += [0, 1]
+        nums_for_training += [2, 3, 4]
         
         self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()

@@ -55,10 +55,10 @@ class BeamDataset(Dataset):
             y_mean += np.sum(abs(y), axis=0).reshape((1, 6))
             h_mean += np.sum(abs(h), axis=0).reshape((1, 6))
 
-        x_mean /= (len(self.idx_list) * self.data_size)
+        x_mean /= (self.total_len * self.data_size)
         x_mean = np.append([1. for i in range(6)], x_mean)
-        y_mean /= len(self.idx_list)
-        h_mean /= len(self.idx_list)
+        y_mean /= self.total_len
+        h_mean /= self.total_len
 
         return (1/x_mean, 1/h_mean, 1/y_mean)
  
@@ -71,7 +71,7 @@ class BeamDataset(Dataset):
             Y_avg_sum += np.sum(h_list, axis=0).reshape((1, 6))
             H_avg_sum += np.sum(y_list, axis=0).reshape((1, 6))
 
-        N = len(self.idx_list)
+        N = self.total_len
 
         mu_y = Y_avg_sum / N
         mu_h = H_avg_sum / N

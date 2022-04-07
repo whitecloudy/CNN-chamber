@@ -67,6 +67,64 @@ class Net(nn.Module):
 
         return x
 
+
+class Net_with1d(nn.Module):
+    def __init__(self, row_size):
+        super(Net_with1d, self).__init__()
+        #self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
+        self.first_fc = nn.Linear(16, 6 * 64)
+        #row_size -= 2
+        self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
+        row_size -= 2
+        self.heur_fc1 = nn.Linear(12, 256)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        self.batch1 = nn.BatchNorm2d(64)
+        self.batch2 = nn.BatchNorm2d(64)
+        self.batch3 = nn.BatchNorm1d(1024)
+        self.heur_batch = nn.BatchNorm1d(256)
+        self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
+        #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
+        self.fc2 = nn.Linear(1024, 12)
+
+        #torch.nn.init.xavier_uniform_(self.conv1.weight)
+        torch.nn.init.xavier_uniform_(self.first_fc.weight)
+        torch.nn.init.xavier_uniform_(self.conv2.weight)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
+
+
+    def forward(self, x, x1):
+        #x = torch.tensor_split(x, (7, ), dim=3)
+        #x = x[0]
+        x = torch.tensor_split(x, 2, dim=1)
+        x = torch.cat((x[0], x[1]), dim=3)
+        #x = self.conv1(x)
+        x = self.first_fc(x)
+        x = torch.cat(torch.tensor_split(x, 64, dim=3), dim=1)
+        x = self.batch1(x)
+        x = F.leaky_relu(x)
+        x = self.conv2(x)
+        x = self.batch2(x)
+        x = F.leaky_relu(x)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x1 = self.heur_fc1(x1)
+        x1 = self.heur_batch(x1)
+        x1 = F.leaky_relu(x1)
+        x = torch.cat((x, x1), 1)
+        x = self.fc1(x)
+        x = self.batch3(x)
+        x = F.leaky_relu(x)
+        x = self.dropout2(x)
+        x = self.fc2(x)
+        #x = torch.tanh(x)
+        #output = F.log_softmax(x, dim=1)
+
+        return x
+
+
 class Net_withoutRow(nn.Module):
     def __init__(self, row_size):
         super(Net_withoutRow, self).__init__()
@@ -145,7 +203,7 @@ class Net_withoutLS(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
     model.train()
-    l = torch.nn.MSELoss(reduction='mean')
+    #l = torch.nn.MSELoss(reduction='mean')
 
     batch_len = int(len(train_loader)/20)
 
@@ -159,7 +217,8 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
         optimizer.zero_grad()
 
         output = model(data, heur)
-        loss = l(output, target)
+        #loss = l(output, target)
+        loss = cos_loss(output, target)
 
         loss.backward()
 
@@ -423,10 +482,12 @@ def main():
         with multi.Pool(args.data_div) as p:
             p.map(training_worker, args_list)
         """
-        #model1 = Net(args.W).to(device)
-        model2 = Net_withoutLS(args.W).to(device)
+        model1 = Net(args.W).to(device)
+        #model2 = Net_withoutLS(args.W).to(device)
         #model3 = Net_withoutRow(args.W).to(device)
-        training_model(args, model2, device, args.val_data_num, True)
+        #model4 = Net_with1d(args.W).to(device)
+
+        training_model(args, model1, device, args.val_data_num, True)
     else:
         model = Net(args.W).to(device)
         testing_model(args, model, device)

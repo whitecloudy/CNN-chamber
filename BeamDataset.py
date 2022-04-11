@@ -23,6 +23,8 @@ def prepare_dataset(row_size, multiply):
         data_filename.append(filename)
         data_segments.append(loaded_data)
         print(len(data_filename))
+        if i==4:
+            break
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
@@ -164,6 +166,7 @@ class DatasetHandler:
         nums_for_training = []
         nums_for_validation = []
 
+        """
         for i in range(data_div):
             step_num_list = list(range(int(i * total_div_len/data_div), int((i+1) * total_div_len/data_div)))
 
@@ -171,6 +174,9 @@ class DatasetHandler:
                 nums_for_validation += step_num_list
             else:
                 nums_for_training += step_num_list
+        """
+        nums_for_validation += [0, 1]
+        nums_for_training += [2, 3, 4]
         
         self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()

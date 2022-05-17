@@ -23,8 +23,6 @@ def prepare_dataset(row_size, multiply):
         data_filename.append(filename)
         data_segments.append(loaded_data)
         print(len(data_filename))
-        if i==4:
-            break
 
 class BeamDataset(Dataset):
     def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
@@ -66,38 +64,40 @@ class BeamDataset(Dataset):
  
 
     def calculate_MMSE_parameter(self):
-        Y_avg_sum = 0
-        H_avg_sum = 0
-        
-        for x_mat_list, h_list, y_list in self.data_list:
-            Y_avg_sum += np.sum(h_list, axis=0).reshape((1, 6))
-            H_avg_sum += np.sum(y_list, axis=0).reshape((1, 6))
+        C_h = 0
+        #C_w_elem = 0
+        C_w = 0
+
+        for x_mat_list, h_list, ls_list in self.data_list:
+            x_split = np.split(x_mat_list, (6, 7, 8), axis=2)
+            S_array = x_split[0]
+            y_array = x_split[1]
+            w_array = x_split[2]
+            #w_array = np.split(x_mat_list, (7, ), axis=2)[1]
+            h_array = h_list.reshape((len(h_list), 6, 1))
+
+            w_array = np.matmul(S_array, h_array) - y_array
+
+            w_H_array = np.conj(np.transpose(w_array, axes=(0, 2, 1)))
+            h_H_array = np.conj(np.transpose(h_array, axes=(0, 2, 1)))
+            h_h_array = np.matmul(h_array, h_H_array)
+            #print(h_h_array)
+            C_h += np.sum(h_h_array, axis=0)
+            #C_w_elem += (np.sum(abs(w_array)/6))
+            #C_w_elem += np.sum(np.matmul(w_array, w_H_array), axis=0)
+            C_w += np.sum(np.matmul(w_array, w_H_array), axis=0)
+
 
         N = self.total_len
 
-        mu_y = Y_avg_sum / N
-        mu_h = H_avg_sum / N
+        C_h /= N
+        #C_w_elem /= N
+        C_w /= N
 
-        r_hy = 0
-        r_yy = 0
+        #C_w = np.zeros((self.data_size, self.data_size), complex)
+        #np.fill_diagonal(C_w, C_w_elem)
 
-        for x_mat_list, h_list, y_list in self.data_list:
-            H_hat_array = y_list.reshape((len(y_list), 6)) - mu_h
-            Y_hat_array = h_list.reshape((len(h_list), 6)) - mu_y
-
-            r_hy_array = H_hat_array.reshape((len(x_mat_list), 6, 1)) * np.conj(Y_hat_array.reshape((len(x_mat_list), 1, 6)))
-            r_yy_array = Y_hat_array.reshape((len(x_mat_list), 6, 1)) * np.conj(Y_hat_array.reshape((len(x_mat_list), 1, 6)))
-
-            r_hy += np.sum(r_hy_array, axis=0)
-            r_yy += np.sum(r_yy_array, axis=0)
-            
-        r_hy /= N
-        r_yy /= N
-
-        r_yy_inv = np.matrix(r_yy).getI()
-        mmse = r_hy * r_yy_inv
-
-        return mmse
+        return C_h, C_w
 
 
     def getNormPara(self):
@@ -115,8 +115,8 @@ class BeamDataset(Dataset):
             cache_name = self.hashname + '.mmse'
             self.MMSE_para = load_cache(cache_name)
             if self.MMSE_para is None:
-                mmse = self.calculate_MMSE_parameter()
-                self.MMSE_para = torch.tensor(mmse, dtype=torch.complex64)
+                C_h, C_w = self.calculate_MMSE_parameter()
+                self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128), torch.tensor(C_w, dtype=torch.complex128))
                 save_cache(self.MMSE_para, cache_name)
 
         return self.MMSE_para
@@ -166,7 +166,6 @@ class DatasetHandler:
         nums_for_training = []
         nums_for_validation = []
 
-        """
         for i in range(data_div):
             step_num_list = list(range(int(i * total_div_len/data_div), int((i+1) * total_div_len/data_div)))
 
@@ -174,17 +173,17 @@ class DatasetHandler:
                 nums_for_validation += step_num_list
             else:
                 nums_for_training += step_num_list
-        """
-        nums_for_validation += [0, 1]
-        nums_for_training += [2, 3, 4]
-        
+                
         self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 
 
 def main():
-    dataset_handler = DatasetHandler()
+    prepare_dataset(12, 1)
+    dataset_handler = DatasetHandler(data_div=5, val_data_num=1, row_size=12)
+    dataset_handler.training_dataset.getMMSEpara()
+
     import gc
     gc.collect()
     print("Waiting")

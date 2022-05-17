@@ -200,10 +200,9 @@ class Net_withoutLS(nn.Module):
         return x
 
 
-
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
     model.train()
-    #l = torch.nn.MSELoss(reduction='mean')
+    l = torch.nn.MSELoss(reduction='mean')
 
     batch_len = int(len(train_loader)/20)
 
@@ -217,8 +216,8 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
         optimizer.zero_grad()
 
         output = model(data, heur)
-        #loss = l(output, target)
-        loss = cos_loss(output, target)
+        loss = l(output, target)
+        #loss = cos_loss(output, target)
 
         loss.backward()
 
@@ -236,6 +235,32 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
         if batch_len <= batch_idx:
             break
+
+
+def calculate_mmse(data, C_h, C_w):
+    data_split = torch.tensor_split(data, (6, 7), dim=3)
+    S = data_split[0]
+    y = data_split[1]
+
+    S = torch.tensor_split(S, 2, dim=1)
+    S_t = torch.tensor(S[0] + S[1]*(1j), dtype=torch.complex128).clone().detach()
+    S_t = torch.squeeze(S_t, dim=1)
+
+    y = torch.tensor_split(y, 2, dim=1)
+    y_t = torch.tensor(y[0] + y[1]*(1j), dtype=torch.complex128).clone().detach()
+    y_t = torch.squeeze(y_t, dim=1)
+
+    SH = torch.conj(torch.transpose(S_t, 2, 1))
+    C_h_SH = torch.matmul(C_h, SH)
+    S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(torch.matmul(S_t, C_h), SH) - C_w)
+    #C_h_SH = SH
+    #S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(S, SH))
+    
+    mmse_result = torch.matmul(C_h_SH, S_Ch_SH_minus_Cw_inv)
+    #mmse_result = torch.matmul(S_Ch_SH_minus_Cw_inv, C_h_SH)
+    h_hat = torch.squeeze(torch.matmul(mmse_result, y_t))
+
+    return h_hat
 
 
 def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
@@ -268,11 +293,14 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
             test_loss += l(output, target)
             test_cos_loss += cos_loss(output, target)
 
+            data /= x_norm
             heur /= y_norm
             
-            mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
-            mmse = torch.cat((mmse.real, mmse.imag), 1)
-            
+            #mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
+            #mmse = torch.cat((mmse.real, mmse.imag), 1)
+            mmse = calculate_mmse(data, mmse_para[0], mmse_para[1])
+            mmse = torch.cat((mmse.real, mmse.imag), dim=1)
+
             test_heur_loss += l(heur, target)
             test_mmse_loss += l(mmse, target)
 
@@ -345,7 +373,9 @@ def training_model(args, model, device, val_data_num, do_print=False):
     x_norm_vector = norm_vector[0].to(device)
     y_norm_vector = norm_vector[1].to(device)
 
-    mmse_para = training_dataset.getMMSEpara().to(device)
+    # mmse_para = (C_h, C_w)
+    mmse_para = training_dataset.getMMSEpara()
+    mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     logCSV = None
@@ -482,12 +512,12 @@ def main():
         with multi.Pool(args.data_div) as p:
             p.map(training_worker, args_list)
         """
-        model1 = Net(args.W).to(device)
+        #model1 = Net(args.W).to(device)
         #model2 = Net_withoutLS(args.W).to(device)
         #model3 = Net_withoutRow(args.W).to(device)
-        #model4 = Net_with1d(args.W).to(device)
+        model4 = Net_with1d(args.W).to(device)
 
-        training_model(args, model1, device, args.val_data_num, True)
+        training_model(args, model4, device, args.val_data_num, True)
     else:
         model = Net(args.W).to(device)
         testing_model(args, model, device)

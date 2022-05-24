@@ -252,7 +252,7 @@ def calculate_mmse(data, C_h, C_w):
 
     SH = torch.conj(torch.transpose(S_t, 2, 1))
     C_h_SH = torch.matmul(C_h, SH)
-    S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(torch.matmul(S_t, C_h), SH) - C_w)
+    S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(torch.matmul(S_t, C_h), SH) + C_w)
     #C_h_SH = SH
     #S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(S, SH))
     

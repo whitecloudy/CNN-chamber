@@ -83,7 +83,7 @@ class BeamDataset(Dataset):
             h_h_array = np.matmul(h_array, h_H_array)
             #print(h_h_array)
             C_h += np.sum(h_h_array, axis=0)
-            #C_w_elem += (np.sum(abs(w_array)/6))
+            #C_w_elem += (np.sum(abs(w_array)/self.data_size))
             #C_w_elem += np.sum(np.matmul(w_array, w_H_array), axis=0)
             C_w += np.sum(np.matmul(w_array, w_H_array), axis=0)
 

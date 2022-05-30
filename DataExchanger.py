@@ -30,8 +30,23 @@ class data_parser:
 
             return torch.FloatTensor([result.real, result.imag]).reshape(12,)
 
+        def select_best(data):
+            max_phase_vec = None
+            max_tag_sig = float("-inf")
+            for d in data:
+                phase_vec = d[0]
+                tag_sig = d[1]
+
+                if abs(tag_sig) > max_tag_sig:
+                    max_tag_sig = abs(tag_sig)
+                    max_phase_vec = phase_vec
+
+            result = np.array(max_phase_vec).reshape((1, 6)).conj()
+            return torch.FloatTensor([result.real, result.imag]).reshape(12,)
+
         self.x_data = parsing(data)
         self.heur_data = calculate_heur(data)
+        self.select_best_data = select_best(data)
 
 
 
@@ -83,7 +98,6 @@ class DataExchanger:
             
             recv_str = recv_str[1:]
 
-
             real = 0.0
             imag = 0.0
             x_row = []
@@ -102,4 +116,4 @@ class DataExchanger:
 
         parsed_data = data_parser(x_matrix)
 
-        return parsed_data.x_data, parsed_data.heur_data
+        return parsed_data.x_data, parsed_data.heur_data, parsed_data.select_best_data

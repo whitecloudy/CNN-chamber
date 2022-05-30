@@ -374,8 +374,11 @@ def training_model(args, model, device, val_data_num, do_print=False):
     y_norm_vector = norm_vector[1].to(device)
 
     # mmse_para = (C_h, C_w)
-    mmse_para = training_dataset.getMMSEpara()
-    mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
+    mmse_para = load_cache(args.log + '.mmse')
+    if mmse_para is None:
+        mmse_para = training_dataset.getMMSEpara()
+        mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
+        save_cache(mmse_para, args.log + '.mmse')
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     logCSV = None
@@ -432,7 +435,7 @@ def training_model(args, model, device, val_data_num, do_print=False):
         torch.save(opt_model_para, str(Path.home())+"/data/cache/"+args.log+'.pt')
 
 
-def inference(model, device, x_data, heur_data, x_norm, y_norm):
+def inference(model, device, x_data, heur_data, x_norm, y_norm, C_h, C_w):
     x_data = x_data.to(device)
     heur_data = heur_data.to(device)
 
@@ -444,13 +447,15 @@ def inference(model, device, x_data, heur_data, x_norm, y_norm):
     output /= y_norm
     heur_data /= y_norm
 
+    mmse = calculate_mmse(x_data, C_h, C_w).to('cpu').detach().numpy()
+
     output = output.to('cpu').detach().numpy().reshape((12))
     output = output[0:6] + output[6:12]*1j
 
     heur_data = heur_data.to('cpu').detach().numpy()
     heur_data = heur_data[0:6] + heur_data[6:12]*1j
 
-    return output, heur_data
+    return output, heur_data, mmse
 
 
 def testing_model(args, model, device):
@@ -463,6 +468,11 @@ def testing_model(args, model, device):
     x_norm_vector = x_norm_vector.to(device)
     y_norm_vector = y_norm_vector.to(device)
 
+    # mmse_para = (C_h, C_w)
+    C_h, C_w = load_cache(args.test + '.mmse')
+    C_h = C_h.to(device)
+    C_w = C_w.to(device)
+
     data_exchanger = DataExchanger()
 
     row_size = args.W
@@ -470,14 +480,16 @@ def testing_model(args, model, device):
     print("Ready")
 
     while True:
-        x_data, heur_data = data_exchanger.recv_data(row_size)
+        x_data, heur_data, select_data = data_exchanger.recv_data(row_size)
         if x_data is None:
             break
         
-        result, heur_data = inference(model, device, x_data, heur_data, x_norm_vector, y_norm_vector)
+        result, heur_data, mmse = inference(model, device, x_data, heur_data, x_norm_vector, y_norm_vector, C_h, C_w)
 
         data_exchanger.send_channel(result)
         data_exchanger.send_channel(heur_data)
+        data_exchanger.send_channel(mmse)
+        data_exchanger.send_channel(select_data)
 
 
 def main():

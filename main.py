@@ -238,19 +238,21 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
 
 def calculate_mmse(data, C_h, C_w):
-    data_split = torch.tensor_split(data, (6, 7), dim=3)
+    data_dim = data.dim()-1
+    print(data.shape)
+    data_split = torch.tensor_split(data, (6, 7), dim=(data_dim))
     S = data_split[0]
     y = data_split[1]
 
-    S = torch.tensor_split(S, 2, dim=1)
+    S = torch.tensor_split(S, 2, dim=(data_dim-2))
     S_t = torch.tensor(S[0] + S[1]*(1j), dtype=torch.complex128).clone().detach()
-    S_t = torch.squeeze(S_t, dim=1)
+    S_t = torch.squeeze(S_t, dim=(data_dim-2))
 
-    y = torch.tensor_split(y, 2, dim=1)
+    y = torch.tensor_split(y, 2, dim=(data_dim-2))
     y_t = torch.tensor(y[0] + y[1]*(1j), dtype=torch.complex128).clone().detach()
-    y_t = torch.squeeze(y_t, dim=1)
+    y_t = torch.squeeze(y_t, dim=(data_dim-2))
 
-    SH = torch.conj(torch.transpose(S_t, 2, 1))
+    SH = torch.conj(torch.transpose(S_t, data_dim-2, data_dim-1))
     C_h_SH = torch.matmul(C_h, SH)
     S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(torch.matmul(S_t, C_h), SH) + C_w)
     #C_h_SH = SH
@@ -486,6 +488,9 @@ def testing_model(args, model, device):
         
         result, heur_data, mmse = inference(model, device, x_data, heur_data, x_norm_vector, y_norm_vector, C_h, C_w)
 
+        select_data = select_data.to('cpu').detach().numpy()
+        select_data = select_data[0:6] + select_data[6:12]*1j
+
         data_exchanger.send_channel(result)
         data_exchanger.send_channel(heur_data)
         data_exchanger.send_channel(mmse)
@@ -531,7 +536,9 @@ def main():
 
         training_model(args, model4, device, args.val_data_num, True)
     else:
-        model = Net(args.W).to(device)
+        #model = Net(args.W).to(device)
+        model = Net_with1d(args.W).to(device)
+
         testing_model(args, model, device)
 
 

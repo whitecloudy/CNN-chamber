@@ -27,7 +27,6 @@ class data_parser:
             W_inv = (W.H*W).I * W.H
 
             result = np.array(W_inv * A).reshape((1, 6))
-
             return torch.FloatTensor([result.real, result.imag]).reshape(12,)
 
         def select_best(data):
@@ -53,6 +52,7 @@ class data_parser:
 import socket
 class DataExchanger:
     def __init__(self, IP='', port=11045):
+        print(port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         self.sock.bind((IP, port))
@@ -76,6 +76,22 @@ class DataExchanger:
         send_byte = send_str.encode('utf-8')
         self.sock.sendto(send_byte, self.recv_addr)
 
+    def wait_reset(self):
+        print("Waithing Reset")
+
+        while True:
+            recv_byte, addr = self.sock.recvfrom(4096)
+            self.recv_addr = addr
+
+            recv_str = recv_byte.decode('utf-8')
+
+            if recv_str[0] == '1':
+                print("End")
+                return -1
+            elif recv_str[0] == '2':
+                print("Reset")
+                return 0
+
 
     def recv_data(self, wait_data_len):
         print(wait_data_len)
@@ -85,7 +101,9 @@ class DataExchanger:
             recv_byte, addr = self.sock.recvfrom(4096)
             self.recv_addr = addr
 
-            recv_str = recv_byte[:-1].decode('utf-8')
+            #recv_str = recv_byte[:-1].decode('utf-8')
+            recv_str = recv_byte.decode('utf-8')
+
 
             if recv_str[0] == '1':
                 print("End")
@@ -110,6 +128,7 @@ class DataExchanger:
                     x_row.append(complex(real, imag))
             # phase_vec, tag_sig, noise_std
             x_data = (x_row[0:6], x_row[6], x_row[7])
+            print(x_data)
 
             x_matrix.append(x_data)
             recv_count += 1

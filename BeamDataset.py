@@ -140,9 +140,9 @@ class BeamDataset(Dataset):
         h = self.data_list[i][1][j]
         y = self.data_list[i][2][j]
 
-        x = torch.FloatTensor([x.real, x.imag])
-        y = torch.FloatTensor([y.real, y.imag]).reshape(12,)
-        h = torch.FloatTensor([h.real, h.imag]).reshape(12,)
+        x = torch.FloatTensor(np.append(np.expand_dims(x.real, axis=0), np.expand_dims(x.imag, axis=0), axis=0))
+        y = torch.FloatTensor(np.append(y.real, y.imag)).reshape(12,)
+        h = torch.FloatTensor(np.append(h.real, h.imag)).reshape(12,)
 
         return x, h, y
 

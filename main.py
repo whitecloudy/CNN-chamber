@@ -71,9 +71,10 @@ class Net(nn.Module):
 class Net_with1d(nn.Module):
     def __init__(self, row_size):
         super(Net_with1d, self).__init__()
-        #self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
-        self.first_fc = nn.Linear(16, 6 * 64)
-        #row_size -= 2
+        self.first_fc = nn.Linear(16, 8 * 8)
+
+        self.conv1 = nn.Conv2d(8, 64, 3, 1) #input is 9 * 8 * 2
+        row_size -= 2
         self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
         row_size -= 2
         self.heur_fc1 = nn.Linear(12, 256)
@@ -87,7 +88,7 @@ class Net_with1d(nn.Module):
         #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
         self.fc2 = nn.Linear(1024, 12)
 
-        #torch.nn.init.xavier_uniform_(self.conv1.weight)
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
         torch.nn.init.xavier_uniform_(self.first_fc.weight)
         torch.nn.init.xavier_uniform_(self.conv2.weight)
         torch.nn.init.xavier_uniform_(self.fc1.weight)
@@ -100,9 +101,9 @@ class Net_with1d(nn.Module):
         #x = x[0]
         x = torch.tensor_split(x, 2, dim=1)
         x = torch.cat((x[0], x[1]), dim=3)
-        #x = self.conv1(x)
         x = self.first_fc(x)
-        x = torch.cat(torch.tensor_split(x, 64, dim=3), dim=1)
+        x = torch.cat(torch.tensor_split(x, 8, dim=3), dim=1)
+        x = self.conv1(x)
         x = self.batch1(x)
         x = F.leaky_relu(x)
         x = self.conv2(x)
@@ -239,17 +240,16 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
 def calculate_mmse(data, C_h, C_w):
     data_dim = data.dim()-1
-    print(data.shape)
     data_split = torch.tensor_split(data, (6, 7), dim=(data_dim))
     S = data_split[0]
     y = data_split[1]
 
     S = torch.tensor_split(S, 2, dim=(data_dim-2))
-    S_t = torch.tensor(S[0] + S[1]*(1j), dtype=torch.complex128).clone().detach()
+    S_t = torch.tensor((S[0] + S[1]*(1j)).clone().detach(), dtype=torch.complex128)
     S_t = torch.squeeze(S_t, dim=(data_dim-2))
 
     y = torch.tensor_split(y, 2, dim=(data_dim-2))
-    y_t = torch.tensor(y[0] + y[1]*(1j), dtype=torch.complex128).clone().detach()
+    y_t = torch.tensor((y[0] + y[1]*(1j)).clone().detach(), dtype=torch.complex128)
     y_t = torch.squeeze(y_t, dim=(data_dim-2))
 
     SH = torch.conj(torch.transpose(S_t, data_dim-2, data_dim-1))
@@ -475,9 +475,9 @@ def testing_model(args, model, device):
     C_h = C_h.to(device)
     C_w = C_w.to(device)
 
-    data_exchanger = DataExchanger()
-
     row_size = args.W
+
+    data_exchanger = DataExchanger(port=(11039+row_size))
 
     print("Ready")
 
@@ -496,6 +496,10 @@ def testing_model(args, model, device):
         data_exchanger.send_channel(mmse)
         data_exchanger.send_channel(select_data)
 
+        rt_val = data_exchanger.wait_reset()
+        if rt_val == -1:
+            break
+
 
 def main():
     ArgsHandler.init_args()
@@ -504,6 +508,8 @@ def main():
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
+
+    print("Connect GPU : ", args.gpunum)
 
     device = torch.device("cuda:"+str(args.gpunum) if use_cuda else "cpu")
 

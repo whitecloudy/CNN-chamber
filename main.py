@@ -202,7 +202,7 @@ def training_model(args, model, device, val_data_num, do_print=False):
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     logCSV = None
     if args.log is not None:
-        logfile = open(args.log+'.csv', "w")
+        logfile = open("result/" + args.log+'.csv', "w")
 
         logCSV = csv.writer(logfile)
         logCSV.writerow(["epoch", "train loss", "test loss", "train ls loss", "test ls loss", "train mmse", "test mmse", "train cos loss", "test cos loss", "train ls cos loss", "test ls cos loss", "train cos mmse", "test cos mmse", "train unable count", "test unable count"])

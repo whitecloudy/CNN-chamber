@@ -7,7 +7,7 @@ from BeamDataset import DatasetHandler, prepare_dataset
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
 
-from ModelHandler import Net, Net_transformer_encoder, Net_with1d, Net_withoutLS, Net_withoutRow
+from ModelHandler import model_selector, Net, Net_transformer_encoder, Net_with1d, Net_withoutLS, Net_withoutRow
 
 import numpy as np
 import csv
@@ -339,8 +339,6 @@ def main():
             exit(1)
     """
 
-    #model_withoutRow = Net_withoutRow(args.W).to(device)
-    #model_withoutLS = Net_withoutLS(args.W).to(device)
 
     if args.test is None:
         prepare_dataset(args.W, 1, args.dry_run)
@@ -353,17 +351,12 @@ def main():
             p.map(training_worker, args_list)
         """
 
-        #model1 = Net(args.W).to(device)
-        #model2 = Net_withoutLS(args.W).to(device)
-        #model3 = Net_withoutRow(args.W).to(device)
-        #model4 = Net_with1d(args.W).to(device)
-        model4 = Net_transformer_encoder(args.W).to(device)
+        print(args.model)
+        model = model_selector(args.model, args.W).to(device)
 
-        training_model(args, model4, device, args.val_data_num, True)
+        training_model(args, model, device, args.val_data_num, True)
     else:
-        #model = Net(args.W).to(device)
-        #model = Net_with1d(args.W).to(device)
-        model = Net_transformer_encoder(args.W).to(device)
+        model = model_selector(args.model, args.W).to(device)
 
         testing_model(args, model, device)
 

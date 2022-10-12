@@ -1,10 +1,22 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 def model_selector(model_name, row_size):
-    pass
+    if model_name == 'Net':
+        return Net(row_size)
+    elif model_name == 'conv1d':
+        return Net_with1d(row_size)
+    elif model_name == 'conv1d_without_ls':
+        return Net_withoutLS(row_size)
+    elif model_name == 'conv1d_without_cnn':
+        return Net_withoutRow(row_size)
+    elif model_name == 'transformer':
+        return Net_transformer_encoder(row_size)
+    else:
+        return -1
 
 
 class Net(nn.Module):
@@ -195,15 +207,15 @@ class Net_transformer_encoder(nn.Module):
     def __init__(self, row_size):
         super(Net_transformer_encoder, self).__init__()
         self.first_fc = nn.Linear(16, 8 * 8)
-        d_model = 64
-        encoder = nn.TransformerEncoderLayer(d_model=d_model, nhead=8, dim_feedforward=256, dropout=0.1, activation="gelu")
+        self.d_model = 64
+        encoder = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=8, dim_feedforward=256, dropout=0.1, activation="gelu")
         self.transformer_encoder = nn.TransformerEncoder(encoder, num_layers=3)
         self.heur_fc1 = nn.Linear(12, 256)
         self.dropout1 = nn.Dropout(0.1)
         self.dropout2 = nn.Dropout(0.5)
         self.batch3 = nn.BatchNorm1d(1024)
         self.heur_batch = nn.BatchNorm1d(256)
-        self.fc1 = nn.Linear(row_size * d_model + 256, 1024) # 21 * 2 * 64
+        self.fc1 = nn.Linear(row_size * self.d_model + 256, 1024) # 21 * 2 * 64
         #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
         self.fc2 = nn.Linear(1024, 12)
 
@@ -221,6 +233,7 @@ class Net_transformer_encoder(nn.Module):
         x = self.first_fc(x)
         x = torch.squeeze(x, dim=1)
         x = x.permute(1, 0, 2)
+        x = x * math.sqrt(self.d_model)
         x = self.transformer_encoder(x)
         x = F.gelu(x)
         x = x.permute(1, 0, 2)

@@ -12,9 +12,14 @@ data_filename = []
 data_segments = []
 
 total_div_len = 40
+dry_run_len = 10
 
-def prepare_dataset(row_size, multiply):
+def prepare_dataset(row_size, multiply, dry_run=False):
     for i in range(total_div_len):
+        if dry_run:
+            if i == dry_run_len:
+                break
+
         filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325.bin'
 
         loaded_data = load_cache(filename)
@@ -166,8 +171,10 @@ class DatasetHandler:
         nums_for_training = []
         nums_for_validation = []
 
+        data_div_len = len(data_filename)
+
         for i in range(data_div):
-            step_num_list = list(range(int(i * total_div_len/data_div), int((i+1) * total_div_len/data_div)))
+            step_num_list = list(range(int(i * data_div_len/data_div), int((i+1) * data_div_len/data_div)))
 
             if i == val_data_num:
                 nums_for_validation += step_num_list

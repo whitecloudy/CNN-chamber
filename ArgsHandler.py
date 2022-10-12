@@ -37,8 +37,8 @@ def init_args():
                         help='If log file name given, we write Logs')
     parser.add_argument('--W', type=int, default=6,
                         help='Row Size')
-    parser.add_argument('--model', type=int, default=1,
-                        help='Select Model number')
+    parser.add_argument('--model', type=str, default="Net",
+                        help='Select Model name')
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
 

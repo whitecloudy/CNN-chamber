@@ -1,14 +1,13 @@
 from __future__ import print_function
 import ArgsHandler
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler, prepare_dataset
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
+
+from ModelHandler import Net, Net_transformer_encoder, Net_with1d, Net_withoutLS, Net_withoutRow
 
 import numpy as np
 import csv
@@ -17,188 +16,6 @@ import multiprocessing as multi
 from CachefileHandler import save_cache, load_cache
 from DataExchanger import DataExchanger
 
-class Net(nn.Module):
-    def __init__(self, row_size):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
-        row_size -= 2
-        self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
-        row_size -= 2
-        self.heur_fc1 = nn.Linear(12, 256)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.batch1 = nn.BatchNorm2d(64)
-        self.batch2 = nn.BatchNorm2d(64)
-        self.batch3 = nn.BatchNorm1d(1024)
-        self.heur_batch = nn.BatchNorm1d(256)
-        self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
-        #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
-        self.fc2 = nn.Linear(1024, 12)
-
-        torch.nn.init.xavier_uniform_(self.conv1.weight)
-        torch.nn.init.xavier_uniform_(self.conv2.weight)
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
-
-
-    def forward(self, x, x1):
-        #x = torch.tensor_split(x, (7, ), dim=3)
-        #x = x[0]
-        x = self.conv1(x)
-        x = self.batch1(x)
-        x = F.leaky_relu(x)
-        x = self.conv2(x)
-        x = self.batch2(x)
-        x = F.leaky_relu(x)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x1 = self.heur_fc1(x1)
-        x1 = self.heur_batch(x1)
-        x1 = F.leaky_relu(x1)
-        x = torch.cat((x, x1), 1)
-        x = self.fc1(x)
-        x = self.batch3(x)
-        x = F.leaky_relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        #x = torch.tanh(x)
-        #output = F.log_softmax(x, dim=1)
-
-        return x
-
-
-class Net_with1d(nn.Module):
-    def __init__(self, row_size):
-        super(Net_with1d, self).__init__()
-        self.first_fc = nn.Linear(16, 8 * 8)
-
-        self.conv1 = nn.Conv2d(8, 64, 3, 1) #input is 9 * 8 * 2
-        row_size -= 2
-        self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
-        row_size -= 2
-        self.heur_fc1 = nn.Linear(12, 256)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.batch1 = nn.BatchNorm2d(64)
-        self.batch2 = nn.BatchNorm2d(64)
-        self.batch3 = nn.BatchNorm1d(1024)
-        self.heur_batch = nn.BatchNorm1d(256)
-        self.fc1 = nn.Linear(row_size * 4 * 64 + 256, 1024) # 21 * 2 * 64
-        #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
-        self.fc2 = nn.Linear(1024, 12)
-
-        torch.nn.init.xavier_uniform_(self.conv1.weight)
-        torch.nn.init.xavier_uniform_(self.first_fc.weight)
-        torch.nn.init.xavier_uniform_(self.conv2.weight)
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
-
-
-    def forward(self, x, x1):
-        #x = torch.tensor_split(x, (7, ), dim=3)
-        #x = x[0]
-        x = torch.tensor_split(x, 2, dim=1)
-        x = torch.cat((x[0], x[1]), dim=3)
-        x = self.first_fc(x)
-        x = torch.cat(torch.tensor_split(x, 8, dim=3), dim=1)
-        x = self.conv1(x)
-        x = self.batch1(x)
-        x = F.leaky_relu(x)
-        x = self.conv2(x)
-        x = self.batch2(x)
-        x = F.leaky_relu(x)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x1 = self.heur_fc1(x1)
-        x1 = self.heur_batch(x1)
-        x1 = F.leaky_relu(x1)
-        x = torch.cat((x, x1), 1)
-        x = self.fc1(x)
-        x = self.batch3(x)
-        x = F.leaky_relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        #x = torch.tanh(x)
-        #output = F.log_softmax(x, dim=1)
-
-        return x
-
-
-class Net_withoutRow(nn.Module):
-    def __init__(self, row_size):
-        super(Net_withoutRow, self).__init__()
-        self.heur_fc1 = nn.Linear(12, 256)
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.batch3 = nn.BatchNorm1d(1024)
-        self.heur_batch = nn.BatchNorm1d(256)
-        self.fc1 = nn.Linear(256, 1024) # 21 * 2 * 64
-        #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
-        self.fc2 = nn.Linear(1024, 12)
-
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
-
-
-    def forward(self, x, x1):
-        #x = torch.tensor_split(x, (7, ), dim=3)
-        #x = x[0]
-        x = self.heur_fc1(x1)
-        x = self.heur_batch(x)
-        x = F.leaky_relu(x)
-        x = self.fc1(x)
-        x = self.batch3(x)
-        x = F.leaky_relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        #x = torch.tanh(x)
-        #output = F.log_softmax(x, dim=1)
-
-        return x
-
-class Net_withoutLS(nn.Module):
-    def __init__(self, row_size):
-        super(Net_withoutLS, self).__init__()
-        self.conv1 = nn.Conv2d(2, 64, 3, 1) #input is 9 * 8 * 2
-        row_size -= 2
-        self.conv2 = nn.Conv2d(64, 64, 3, 1) # input is 7 * 6 * 64
-        row_size -= 2
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        self.batch1 = nn.BatchNorm2d(64)
-        self.batch2 = nn.BatchNorm2d(64)
-        self.batch3 = nn.BatchNorm1d(1024)
-        self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
-        self.fc2 = nn.Linear(1024, 12)
-
-        torch.nn.init.xavier_uniform_(self.conv1.weight)
-        torch.nn.init.xavier_uniform_(self.conv2.weight)
-        torch.nn.init.xavier_uniform_(self.fc1.weight)
-        torch.nn.init.xavier_uniform_(self.fc2.weight)
-
-
-    def forward(self, x, x1):
-        #x = torch.tensor_split(x, (7, ), dim=3)
-        #x = x[0]
-        x = self.conv1(x)
-        x = self.batch1(x)
-        x = F.leaky_relu(x)
-        x = self.conv2(x)
-        x = self.batch2(x)
-        x = F.leaky_relu(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = self.batch3(x)
-        x = F.leaky_relu(x)
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        #x = torch.tanh(x)
-        #output = F.log_softmax(x, dim=1)
-
-        return x
 
 
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
@@ -526,7 +343,7 @@ def main():
     #model_withoutLS = Net_withoutLS(args.W).to(device)
 
     if args.test is None:
-        prepare_dataset(args.W, 1)
+        prepare_dataset(args.W, 1, args.dry_run)
         """
         args_list = []
         for i in range(args.data_div):
@@ -535,15 +352,18 @@ def main():
         with multi.Pool(args.data_div) as p:
             p.map(training_worker, args_list)
         """
+
         #model1 = Net(args.W).to(device)
         #model2 = Net_withoutLS(args.W).to(device)
         #model3 = Net_withoutRow(args.W).to(device)
-        model4 = Net_with1d(args.W).to(device)
+        #model4 = Net_with1d(args.W).to(device)
+        model4 = Net_transformer_encoder(args.W).to(device)
 
         training_model(args, model4, device, args.val_data_num, True)
     else:
         #model = Net(args.W).to(device)
-        model = Net_with1d(args.W).to(device)
+        #model = Net_with1d(args.W).to(device)
+        model = Net_transformer_encoder(args.W).to(device)
 
         testing_model(args, model, device)
 

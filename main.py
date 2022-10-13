@@ -179,7 +179,8 @@ def training_model(args, model, device, val_data_num, do_print=False):
         print("Test Dataset : ", len(test_dataset))
 
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
-    test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+    train_test_loader = torch.utils.data.DataLoader(training_dataset, **test_kwargs)
+    valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
@@ -196,8 +197,9 @@ def training_model(args, model, device, val_data_num, do_print=False):
     mmse_para = load_cache(args.log + '.mmse')
     if mmse_para is None:
         mmse_para = training_dataset.getMMSEpara()
-        mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
         save_cache(mmse_para, args.log + '.mmse')
+    
+    mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     logCSV = None
@@ -217,11 +219,11 @@ def training_model(args, model, device, val_data_num, do_print=False):
         
         if do_print:
             print("<< Test Loader >>")
-        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
         if do_print:
             print("<< Train Loader >>")
-        train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+        train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
         if logCSV is not None:
             logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
@@ -240,7 +242,8 @@ def training_model(args, model, device, val_data_num, do_print=False):
         test_dataset = dataset_handler.test_dataset
         
         train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
-        test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+        train_test_loader = torch.utils.data.DataLoader(training_dataset, **test_kwargs)
+        valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
         if args.dry_run:
             break

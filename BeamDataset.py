@@ -121,7 +121,7 @@ class BeamDataset(Dataset):
             self.MMSE_para = load_cache(cache_name)
             if self.MMSE_para is None:
                 C_h, C_w = self.calculate_MMSE_parameter()
-                self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128), torch.tensor(C_w, dtype=torch.complex128))
+                self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128).to("cpu"), torch.tensor(C_w, dtype=torch.complex128).to("cpu"))
                 save_cache(self.MMSE_para, cache_name)
 
         return self.MMSE_para

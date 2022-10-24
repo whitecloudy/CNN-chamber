@@ -12,7 +12,7 @@ def init_args():
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 10000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
+                        help='number of max epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
@@ -37,10 +37,13 @@ def init_args():
                         help='If log file name given, we write Logs')
     parser.add_argument('--W', type=int, default=6,
                         help='Row Size')
+    parser.add_argument('--patience', type=int, default=3,
+                        help='Early stopping patience')
     parser.add_argument('--model', type=str, default="Net",
                         help='Select Model name')
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
+    
 
 
     global args

@@ -155,7 +155,7 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
     return test_loss, float(test_heur_loss), float(test_mmse_loss), test_cos_loss, float(test_heur_cos_loss), float(test_mmse_cos_loss), test_unable_heur
 
 
-def training_model(args, model, device, val_data_num, do_print=False):
+def training_model(args, model, device, val_data_num, do_print=False, early_stopping_patience=3):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
@@ -211,7 +211,9 @@ def training_model(args, model, device, val_data_num, do_print=False):
     else:
         logfile = None
     
+    min_cos_loss = float('inf')
     min_loss = float('inf')
+    early_stopping_ctr = early_stopping_patience
     opt_model_para = None
 
     for epoch in range(1, args.epochs + 1):
@@ -233,9 +235,18 @@ def training_model(args, model, device, val_data_num, do_print=False):
         if epoch is args.epochs:
             break
 
-        if args.save_model and min_loss > test_cos_loss:
-            min_loss = test_cos_loss
+        if args.save_model and min_cos_loss > test_cos_loss:
+            min_cos_loss = test_cos_loss
             opt_model_para = copy.deepcopy(model.state_dict())
+        
+        if min_loss > test_loss:
+            min_loss = test_loss
+            early_stopping_ctr = early_stopping_patience
+        else:
+            early_stopping_ctr -= 1
+            if early_stopping_ctr <= 0:
+                print("Early stopping Triggered")
+                break
 
         # renew dataset
         training_dataset = dataset_handler.training_dataset
@@ -357,7 +368,7 @@ def main():
         print(args.model)
         model = model_selector(args.model, args.W).to(device)
 
-        training_model(args, model, device, args.val_data_num, True)
+        training_model(args, model, device, args.val_data_num, True, early_stopping_patience=args.patience)
     else:
         model = model_selector(args.model, args.W).to(device)
 

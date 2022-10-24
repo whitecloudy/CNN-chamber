@@ -280,6 +280,7 @@ class Net_transformer_encoder_ver2(nn.Module):
         torch.nn.init.xavier_uniform_(self.first_fc.weight)
         torch.nn.init.xavier_uniform_(self.fc1.weight)
         torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.xavier_uniform_(self.encoder_output_layer.weight)
         torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
 
 

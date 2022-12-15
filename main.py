@@ -62,11 +62,11 @@ def calculate_mmse(data, C_h, C_w):
     y = data_split[1]
 
     S = torch.tensor_split(S, 2, dim=(data_dim-2))
-    S_t = torch.tensor((S[0] + S[1]*(1j)).clone().detach(), dtype=torch.complex128)
+    S_t = ((S[0] + S[1]*1j).clone().detach()).type(torch.complex128)
     S_t = torch.squeeze(S_t, dim=(data_dim-2))
 
     y = torch.tensor_split(y, 2, dim=(data_dim-2))
-    y_t = torch.tensor((y[0] + y[1]*(1j)).clone().detach(), dtype=torch.complex128)
+    y_t = ((y[0] + y[1]*1j).clone().detach()).type(torch.complex128)
     y_t = torch.squeeze(y_t, dim=(data_dim-2))
 
     SH = torch.conj(torch.transpose(S_t, data_dim-2, data_dim-1))
@@ -168,8 +168,8 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
 
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
-
-    dataset_handler = DatasetHandler(data_div=args.data_div, val_data_num=val_data_num, row_size=args.W)
+    aug_para = (args.aug1, args.aug2)
+    dataset_handler = DatasetHandler(data_div=args.data_div, val_data_num=val_data_num, row_size=args.W, aug_para=aug_para)
 
     training_dataset = dataset_handler.training_dataset
     if do_print:

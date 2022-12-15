@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import ArgsHandler
 import Proc
+import cmath
 from CachefileHandler import load_cache, save_cache, make_cache_hashname
 
 from torch.utils.data import Dataset
@@ -20,7 +21,7 @@ def prepare_dataset(row_size, multiply, dry_run=False):
             if i == dry_run_len:
                 break
 
-        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325.bin'
+        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver114.bin'
 
         loaded_data = load_cache(filename)
 
@@ -30,9 +31,11 @@ def prepare_dataset(row_size, multiply, dry_run=False):
         print(len(data_filename))
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None):
+    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_para=(1,1)):
         self.multiply = multiply
         self.data_size = data_size
+        self.aug_para = aug_para
+        self.aug_multiply = 1
         
         print(len(data_filename))
         cache_filename_list = [(data_filename[i], ) for i in num_list]
@@ -48,6 +51,9 @@ class BeamDataset(Dataset):
             self.total_len += self.len_list[i]
             print(self.len_list[i])
 
+        for aug in aug_para:
+            self.aug_multiply *= aug
+        
         self.MMSE_para = MMSE_para
         self.normalize = normalize
 
@@ -126,10 +132,47 @@ class BeamDataset(Dataset):
 
         return self.MMSE_para
 
-    def __len__(self):
-        return int(self.total_len)
+    
+    def do_aug(self, x, h, y):
+        x_aug_vector = np.ones(8, dtype=np.complex128)
+        h_aug_vector = np.ones(6, dtype=np.complex128)
+        y_aug_vector = np.ones((6,1), dtype=np.complex128)
 
-    def __getitem__(self, idx):
+        if self.aug_para[0] != 1:
+            rand_val = np.random.randint(self.aug_para[0])
+            if rand_val != 0:
+                fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[0])) 
+                random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[0]))
+
+                shift_val = fix_shift * random_shift
+             
+                x_aug_vector[6:8] *= shift_val
+                h_aug_vector *= shift_val
+                y_aug_vector *= shift_val
+        
+        if self.aug_para[1] != 1:
+            rand_val = np.random.randint(self.aug_para[1])
+            if rand_val != 0:
+                fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[1])) 
+                random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[1]))
+
+                shift_val = fix_shift * random_shift
+
+                x_aug_vector[0:6] *= shift_val
+                h_aug_vector *= shift_val.conjugate()
+                y_aug_vector *= shift_val.conjugate()
+        
+        x *= x_aug_vector
+        d = np.split(x, [7,], axis=1)
+        d[1] = abs(d[1].real) + abs(d[1].imag)*1j
+        x = np.append(d[0], d[1], axis=1)
+        y *= y_aug_vector
+        h *= h_aug_vector
+
+        return x, h, y
+
+
+    def get_data(self, idx):
         i = 0
         j = 0
         while True:
@@ -145,6 +188,17 @@ class BeamDataset(Dataset):
         h = self.data_list[i][1][j]
         y = self.data_list[i][2][j]
 
+        x, h, y = self.do_aug(x, h, y)
+
+        return x, h, y
+
+
+    def __len__(self):
+        return int(self.total_len * self.aug_multiply)
+
+    def __getitem__(self, idx):
+        x, h, y = self.get_data(int(idx/self.aug_multiply))
+
         x = torch.FloatTensor(np.append(np.expand_dims(x.real, axis=0), np.expand_dims(x.imag, axis=0), axis=0))
         y = torch.FloatTensor(np.append(y.real, y.imag)).reshape(12,)
         h = torch.FloatTensor(np.append(h.real, h.imag)).reshape(12,)
@@ -153,7 +207,7 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6):
+    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_para=(1,1)):
         self.multiply = multiply
         self.data_div = data_div
         self.val_data_num = val_data_num
@@ -161,6 +215,7 @@ class DatasetHandler:
 
         self.training_dataset = None
         self.test_dataset = None
+        self.aug_para = aug_para
         
         self.prepare_dataset()
 
@@ -181,7 +236,7 @@ class DatasetHandler:
             else:
                 nums_for_training += step_num_list
                 
-        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size)#, self.normalize)
+        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_para=self.aug_para)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 

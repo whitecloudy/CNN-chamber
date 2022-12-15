@@ -190,7 +190,6 @@ class DataProcessor:
                         except NameError:
                             print("Name Error")
                             continue
-
                     else:
                         continue
         x_result = np.array(x_result)
@@ -199,10 +198,11 @@ class DataProcessor:
 
         return x_result, h_result, y_result
 
+
 def work_for_preparing(data_c, i, multiply, row_size):
     print("<<<", i, " ", row_size, ">>>")
     data_list = data_c.prepare_data(multiply=multiply, row_size=row_size)
-    filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325.bin'
+    filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver114.bin'
     save_cache(data_list, filename)
     print("Done ", i, " ", row_size)
 

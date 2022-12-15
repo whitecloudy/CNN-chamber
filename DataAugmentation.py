@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from DataHandler import dataParser
 
-aug_para = (3, 3, 4)
+aug_para = (1, 1, 4)
 
 def data_augmentation(data, label, key):
     result_list = [(data, label, key)]
@@ -82,8 +82,9 @@ def data_aug3(data, label, key):
     result_list = [(data, label, key + (0,))]
 
     shuffle_candidate = [[2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]]
-
-    for shuffle in shuffle_candidate:
+    
+    for shuf_idx in range(aug_para[2]-1):
+        shuffle = shuffle_candidate[shuf_idx]
         shuffle_label = np.array([label[shuffle[i]] for i in range(6)])
 
         shuffle_key = key + (shuffle,)

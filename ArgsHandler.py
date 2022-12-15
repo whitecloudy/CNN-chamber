@@ -41,6 +41,10 @@ def init_args():
                         help='Early stopping patience')
     parser.add_argument('--model', type=str, default="Net",
                         help='Select Model name')
+    parser.add_argument('--aug1', type=int, default=1,
+                        help='Augmentation 1 level')  
+    parser.add_argument('--aug2', type=int, default=1,
+                        help='Augmentation 2 level')                                      
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
     

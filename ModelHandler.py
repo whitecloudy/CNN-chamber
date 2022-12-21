@@ -16,7 +16,7 @@ def model_selector(model_name, row_size):
     elif model_name == 'transformer':
         return Net_transformer_encoder(row_size)
     elif model_name == 'transformer_ver2':
-        return Net_transformer_encoder(row_size)
+        return Net_transformer_encoder_ver2(row_size)
     elif model_name == 'transformer_encoder_only':
         return Net_transformer_encoder_only(row_size)
     elif model_name == 'transformer_ls_stack':

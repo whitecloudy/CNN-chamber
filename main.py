@@ -32,18 +32,23 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
         target *= y_norm
         heur *= y_norm
 
-        optimizer.zero_grad()
+        data_split = torch.split(data, args.batch_size, dim=0)
+        target_split = torch.split(target, args.batch_size, dim=0)
+        heur_split = torch.split(heur, args.batch_size, dim=0)
 
-        output = model(data, heur)
-        loss = l(output, target)
-        #loss = cos_loss(output, target)
+        for i in range(len(data_split)):
+            optimizer.zero_grad()
 
-        loss.backward()
+            output = model(data_split[i], heur_split[i])
+            loss = l(output, target_split[i])
+            #loss = cos_loss(output, target)
 
-        #if torch.isnan(loss).any() or torch.isinf(loss).any():
-        #    assert False, "Nan is detected"
+            loss.backward()
 
-        optimizer.step()
+            #if torch.isnan(loss).any() or torch.isinf(loss).any():
+            #    assert False, "Nan is detected"
+
+            optimizer.step()
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -159,7 +164,7 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
 def training_model(args, model, device, val_data_num, do_print=False, early_stopping_patience=3):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
+    train_kwargs = {'batch_size': args.batch_size*args.load_minibatch_multiplier, 'shuffle': True}
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:

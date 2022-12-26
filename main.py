@@ -2,6 +2,7 @@ from __future__ import print_function
 import ArgsHandler
 import torch
 import torch.optim as optim
+import time
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler, prepare_dataset
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
@@ -162,7 +163,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 8,
+        cuda_kwargs = {'num_workers': 40,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -217,8 +218,17 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     opt_model_para = None
 
     for epoch in range(1, args.epochs + 1):
+        start_time = time.time()
         train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector, do_print)
-        
+        end_time = time.time()
+
+        consumed_time = end_time - start_time
+
+        if do_print:
+            print("Training Consumed time: ", consumed_time)
+
+
+        start_time = time.time()
         if do_print:
             print("<< Test Loader >>")
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
@@ -226,6 +236,12 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         if do_print:
             print("<< Train Loader >>")
         train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+        end_time = time.time()
+
+        consumed_time = end_time - start_time
+
+        if do_print:
+            print("Validation Consumed time: ", consumed_time)
 
         if logCSV is not None:
             logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])

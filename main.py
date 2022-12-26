@@ -26,27 +26,21 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     batch_len = int(len(train_loader)/20)
 
     for batch_idx, (data, heur, target) in enumerate(train_loader):
-        data_len = len(data)
-        data_split_list = np.split(np.arange(data_len), args.batch_size)
-
         data, target, heur = data.to(device), target.to(device), heur.to(device)
         
         data *= x_norm
         target *= y_norm
         heur *= y_norm
 
-        #data_split = torch.split(data, args.batch_size, dim=0)
-        #target_split = torch.split(target, args.batch_size, dim=0)
-        #heur_split = torch.split(heur, args.batch_size, dim=0)
-        
-        for i in range(len(data_split_list)):
-            start_index = data_split_list[i][0]
-            end_index = data_split_list[i][-1]+1
-            
+        data_split = torch.split(data, args.batch_size, dim=0)
+        target_split = torch.split(target, args.batch_size, dim=0)
+        heur_split = torch.split(heur, args.batch_size, dim=0)
+
+        for i in range(len(data_split)):
             optimizer.zero_grad()
 
-            output = model(data[start_index:end_index], heur[start_index:end_index])
-            loss = l(output, target[start_index:end_index])
+            output = model(data_split[i], heur_split[i])
+            loss = l(output, target_split[i])
             #loss = cos_loss(output, target)
 
             loss.backward()
@@ -58,7 +52,7 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * data_len, batch_len * data_len,
+                epoch, batch_idx * len(data), batch_len * len(data),
                 100. * batch_idx / batch_len, loss.item()))
         if args.dry_run:
             break

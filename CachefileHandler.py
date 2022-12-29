@@ -28,11 +28,14 @@ def save_cache(save_data, cache_filename):
         pickle.dump(save_data, cache_file)
 
 
-def load_cache(cache_filename):
-    cache_path = str(Path.home()) + "/data/cache/" + cache_filename
+def load_cache(cache_filename, testing=False):
+    if testing:
+        cache_path = cache_filename
+    else:
+        cache_path = str(Path.home()) + "/data/cache/" + cache_filename
 
     rt_data = None
-    print(cache_filename)
+    print(cache_path)
     if os.path.isfile(cache_path):
         print("Cache file found")
         with open(cache_path, "rb") as cache_file:

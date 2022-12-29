@@ -318,12 +318,13 @@ def testing_model(args, model, device):
         model.load_state_dict(torch.load(pt_file, map_location=device))
 
     model.eval()
-    x_norm_vector, y_norm_vector = load_cache(args.test+'.norm')
+    print(args.test)
+    x_norm_vector, y_norm_vector = load_cache(args.test+'.norm', testing=True)
     x_norm_vector = x_norm_vector.to(device)
     y_norm_vector = y_norm_vector.to(device)
 
     # mmse_para = (C_h, C_w)
-    C_h, C_w = load_cache(args.test + '.mmse')
+    C_h, C_w = load_cache(args.test + '.mmse', testing=True)
     C_h = C_h.to(device)
     C_w = C_w.to(device)
 

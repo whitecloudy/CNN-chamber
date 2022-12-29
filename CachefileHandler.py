@@ -22,7 +22,7 @@ def make_cache_hashname(datas, header=None, tail=None):
 def save_cache(save_data, cache_filename):
     import os
     from pathlib import Path
-    cache_path = str(Path.home()) + "/data/cache/" + cache_filename
+    cache_path = str(Path.home()) + "/ssddata/cache/" + cache_filename
 
     with open(cache_path, "wb") as cache_file:
         pickle.dump(save_data, cache_file)
@@ -32,7 +32,7 @@ def load_cache(cache_filename, testing=False):
     if testing:
         cache_path = cache_filename
     else:
-        cache_path = str(Path.home()) + "/data/cache/" + cache_filename
+        cache_path = str(Path.home()) + "/ssddata/cache/" + cache_filename
 
     rt_data = None
     print(cache_path)

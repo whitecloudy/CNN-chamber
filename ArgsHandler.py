@@ -12,7 +12,7 @@ def init_args():
     parser.add_argument('--load-minibatch-multiplier', type=int, default=1, metavar='N',
                         help='loading batch size multiplier(default: 40)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for testing (default: 10000)')
+                        help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of max epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=1.0, metavar='LR',

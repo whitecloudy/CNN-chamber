@@ -37,18 +37,16 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
         heur_split = torch.split(heur, args.batch_size, dim=0)
 
         for i in range(len(data_split)):
-            optimizer.zero_grad()
-
             output = model(data_split[i], heur_split[i])
             loss = l(output, target_split[i])
             #loss = cos_loss(output, target)
 
+            optimizer.zero_grad()
             loss.backward()
+            optimizer.step()
 
             #if torch.isnan(loss).any() or torch.isinf(loss).any():
             #    assert False, "Nan is detected"
-
-            optimizer.step()
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -168,7 +166,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 40,
+        cuda_kwargs = {'num_workers': 64,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -298,6 +296,7 @@ def inference(model, device, x_data, heur_data, x_norm, y_norm, C_h, C_w):
 
     output = model(x_data[None, ...], heur_data[None, ...])
 
+    x_data /= x_norm
     output /= y_norm
     heur_data /= y_norm
 

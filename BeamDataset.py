@@ -31,7 +31,7 @@ def prepare_dataset(row_size, multiply, dry_run=False):
         print(len(data_filename))
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_para=(1,1)):
+    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_para=None):
         self.multiply = multiply
         self.data_size = data_size
         self.aug_para = aug_para
@@ -51,8 +51,11 @@ class BeamDataset(Dataset):
             self.total_len += self.len_list[i]
             print(self.len_list[i])
 
-        for aug in aug_para:
-            self.aug_multiply *= aug
+        if aug_para is None:
+            self.aug_multiply = 1
+        else:
+            for aug in aug_para:
+                self.aug_multiply *= aug
         
         self.MMSE_para = MMSE_para
         self.normalize = normalize
@@ -140,7 +143,8 @@ class BeamDataset(Dataset):
 
         if self.aug_para[0] != 1:
             rand_val = np.random.randint(self.aug_para[0])
-            if rand_val != 0:
+            zero_do_rand_val = np.random.randint(2)
+            if rand_val != 0 or zero_do_rand_val != 0:
                 fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[0])) 
                 random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[0]))
 
@@ -152,7 +156,8 @@ class BeamDataset(Dataset):
         
         if self.aug_para[1] != 1:
             rand_val = np.random.randint(self.aug_para[1])
-            if rand_val != 0:
+            zero_do_rand_val = np.random.randint(2)
+            if rand_val != 0 or zero_do_rand_val != 0:
                 fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[1])) 
                 random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[1]))
 
@@ -188,7 +193,8 @@ class BeamDataset(Dataset):
         h = self.data_list[i][1][j]
         y = self.data_list[i][2][j]
 
-        x, h, y = self.do_aug(x, h, y)
+        if self.aug_para is not None:
+            x, h, y = self.do_aug(x, h, y)
 
         return x, h, y
 
@@ -207,13 +213,14 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_para=(1,1)):
+    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_para=None):
         self.multiply = multiply
         self.data_div = data_div
         self.val_data_num = val_data_num
         self.row_size = row_size
 
         self.training_dataset = None
+        self.training_test_dataset = None
         self.test_dataset = None
         self.aug_para = aug_para
         
@@ -238,6 +245,7 @@ class DatasetHandler:
                 
         self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_para=self.aug_para)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
+        self.training_test_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, self.normalize)
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 
 

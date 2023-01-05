@@ -166,7 +166,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 64,
+        cuda_kwargs = {'num_workers': 96,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -178,12 +178,15 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     training_dataset = dataset_handler.training_dataset
     if do_print:
         print("Training Dataset : ", len(training_dataset))
+    training_test_dataset = dataset_handler.training_test_dataset
+    if do_print:
+        print("training Test Dataset : ", len(training_test_dataset))
     test_dataset = dataset_handler.test_dataset
     if do_print:
         print("Test Dataset : ", len(test_dataset))
 
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
-    train_test_loader = torch.utils.data.DataLoader(training_dataset, **test_kwargs)
+    train_test_loader = torch.utils.data.DataLoader(training_test_dataset, **test_kwargs)
     valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr)

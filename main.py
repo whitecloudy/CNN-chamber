@@ -181,7 +181,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 16,
+        cuda_kwargs = {'num_workers': 8,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -255,7 +255,8 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
         scheduler.step()
-        torch.cuda.empty_cache()
+        with torch.cuda.device('cuda:'+str(args.gpunum)):
+            torch.cuda.empty_cache()
 
         if do_print:
             print("<< Train Loader >>")

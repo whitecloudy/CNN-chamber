@@ -40,7 +40,9 @@ class BeamDataset(Dataset):
         print(len(data_filename))
         cache_filename_list = [(data_filename[i], ) for i in num_list]
         self.hashname = make_cache_hashname(cache_filename_list)
-        self.data_list = [np.empty((0, self.data_size, 8)), np.empty((0, self.data_size)), np.empty((0, self.data_size, 1))]
+        self.x_list = np.empty((0, self.data_size, 8))
+        self.h_list = np.empty((0, self.data_size))
+        self.y_list = np.empty((0, self.data_size, 1))
         #self.len_list = []
         self.total_len = 0
 
@@ -55,9 +57,9 @@ class BeamDataset(Dataset):
             #print(self.len_list[i])
             print(self.total_len)
 
-        self.data_list[0] = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
-        self.data_list[1] = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
-        self.data_list[2] = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
+        self.x_list = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
+        self.h_list = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
+        self.y_list = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
 
         if aug_para is None:
             self.aug_multiply = 1
@@ -72,10 +74,10 @@ class BeamDataset(Dataset):
         x_mean = 0
         y_mean = 0
         h_mean = 0
-        for x_mat, h, y in self.data_list:
-            x_mean += np.sum(np.sum(abs(np.split(x_mat, (6, ), axis=2)[1]), axis=0), axis=0)
-            y_mean += np.sum(abs(y), axis=0).reshape((1, 6))
-            h_mean += np.sum(abs(h), axis=0).reshape((1, 6))
+
+        x_mean += np.sum(np.sum(abs(np.split(self.x_list, (6, ), axis=2)[1]), axis=0), axis=0)
+        y_mean += np.sum(abs(self.y_list), axis=0).reshape((1, 6))
+        h_mean += np.sum(abs(self.h_list), axis=0).reshape((1, 6))
 
         x_mean /= (self.total_len * self.data_size)
         x_mean = np.append([1. for i in range(6)], x_mean)
@@ -90,24 +92,26 @@ class BeamDataset(Dataset):
         #C_w_elem = 0
         C_w = 0
 
-        for x_mat_list, h_list, ls_list in self.data_list:
-            x_split = np.split(x_mat_list, (6, 7, 8), axis=2)
-            S_array = x_split[0]
-            y_array = x_split[1]
-            w_array = x_split[2]
-            #w_array = np.split(x_mat_list, (7, ), axis=2)[1]
-            h_array = h_list.reshape((len(h_list), 6, 1))
+        x_mat_list = self.x_list
+        h_list = self.h_list
 
-            w_array = np.matmul(S_array, h_array) - y_array
+        x_split = np.split(x_mat_list, (6, 7, 8), axis=2)
+        S_array = x_split[0]
+        y_array = x_split[1]
+        w_array = x_split[2]
+        #w_array = np.split(x_mat_list, (7, ), axis=2)[1]
+        h_array = h_list.reshape((len(h_list), 6, 1))
 
-            w_H_array = np.conj(np.transpose(w_array, axes=(0, 2, 1)))
-            h_H_array = np.conj(np.transpose(h_array, axes=(0, 2, 1)))
-            h_h_array = np.matmul(h_array, h_H_array)
-            #print(h_h_array)
-            C_h += np.sum(h_h_array, axis=0)
-            #C_w_elem += (np.sum(abs(w_array)/self.data_size))
-            #C_w_elem += np.sum(np.matmul(w_array, w_H_array), axis=0)
-            C_w += np.sum(np.matmul(w_array, w_H_array), axis=0)
+        w_array = np.matmul(S_array, h_array) - y_array
+
+        w_H_array = np.conj(np.transpose(w_array, axes=(0, 2, 1)))
+        h_H_array = np.conj(np.transpose(h_array, axes=(0, 2, 1)))
+        h_h_array = np.matmul(h_array, h_H_array)
+        #print(h_h_array)
+        C_h += np.sum(h_h_array, axis=0)
+        #C_w_elem += (np.sum(abs(w_array)/self.data_size))
+        #C_w_elem += np.sum(np.matmul(w_array, w_H_array), axis=0)
+        C_w += np.sum(np.matmul(w_array, w_H_array), axis=0)
 
 
         N = self.total_len
@@ -202,9 +206,9 @@ class BeamDataset(Dataset):
         # h = self.data_list[i][1][j]
         # y = self.data_list[i][2][j]
 
-        x = self.data_list[0][idx]
-        h = self.data_list[1][idx]
-        y = self.data_list[2][idx]
+        x = self.x_list[idx]
+        h = self.h_list[idx]
+        y = self.y_list[idx]
 
         if self.aug_para is not None:
             x, h, y = self.do_aug(x, h, y)

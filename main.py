@@ -254,6 +254,8 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
             print("<< Test Loader >>")
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
+        scheduler.step()
+
         if do_print:
             print("<< Train Loader >>")
         train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = test(model, device, train_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
@@ -267,7 +269,6 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         if logCSV is not None:
             logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
 
-        scheduler.step()
 
         if epoch is args.epochs:
             break
@@ -288,9 +289,10 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         # renew dataset
         training_dataset = dataset_handler.training_dataset
         test_dataset = dataset_handler.test_dataset
+        training_test_dataset = dataset_handler.training_test_dataset
         
         train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
-        train_test_loader = torch.utils.data.DataLoader(training_dataset, **test_kwargs)
+        train_test_loader = torch.utils.data.DataLoader(training_test_dataset, **test_kwargs)
         valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
         if args.dry_run:

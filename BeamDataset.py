@@ -40,16 +40,24 @@ class BeamDataset(Dataset):
         print(len(data_filename))
         cache_filename_list = [(data_filename[i], ) for i in num_list]
         self.hashname = make_cache_hashname(cache_filename_list)
-        self.data_list = []
-        self.len_list = []
+        self.data_list = [np.empty((0, self.data_size, 8)), np.empty((0, self.data_size)), np.empty((0, self.data_size, 1))]
+        #self.len_list = []
         self.total_len = 0
 
         for i, idx in enumerate(num_list):
             # data will be loaded in (x, h, y)
-            self.data_list.append(data_segments[idx])
-            self.len_list.append(len(data_segments[idx][0]))
-            self.total_len += self.len_list[i]
-            print(self.len_list[i])
+            # self.data_list[0] = np.append(self.data_list[0], data_segments[idx][0], axis=0)
+            # self.data_list[1] = np.append(self.data_list[1], data_segments[idx][1], axis=0)
+            # self.data_list[2] = np.append(self.data_list[2], data_segments[idx][2], axis=0)
+            #self.len_list.append(len(data_segments[idx][0]))
+            #self.total_len += self.len_list[i]
+            self.total_len += len(data_segments[idx][0])
+            #print(self.len_list[i])
+            print(self.total_len)
+
+        self.data_list[0] = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
+        self.data_list[1] = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
+        self.data_list[2] = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
 
         if aug_para is None:
             self.aug_multiply = 1
@@ -143,7 +151,8 @@ class BeamDataset(Dataset):
 
         if self.aug_para[0] != 1:
             rand_val = np.random.randint(self.aug_para[0])
-            zero_do_rand_val = np.random.randint(2)
+            #zero_do_rand_val = np.random.randint(2)
+            zero_do_rand_val = 0
             if rand_val != 0 or zero_do_rand_val != 0:
                 fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[0])) 
                 random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[0]))
@@ -178,20 +187,24 @@ class BeamDataset(Dataset):
 
 
     def get_data(self, idx):
-        i = 0
-        j = 0
-        while True:
-            length = self.len_list[i]
-            if idx < length: 
-                j = idx
-                break
-            else:
-                idx -= length
-                i += 1
+        # i = 0
+        # j = 0
+        # while True:
+        #     length = self.len_list[i]
+        #     if idx < length: 
+        #         j = idx
+        #         break
+        #     else:
+        #         idx -= length
+        #         i += 1
 
-        x = self.data_list[i][0][j]
-        h = self.data_list[i][1][j]
-        y = self.data_list[i][2][j]
+        # x = self.data_list[i][0][j]
+        # h = self.data_list[i][1][j]
+        # y = self.data_list[i][2][j]
+
+        x = self.data_list[0][idx]
+        h = self.data_list[1][idx]
+        y = self.data_list[2][idx]
 
         if self.aug_para is not None:
             x, h, y = self.do_aug(x, h, y)

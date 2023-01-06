@@ -24,29 +24,43 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     l = torch.nn.MSELoss(reduction='mean')
 
     batch_len = int(len(train_loader)/20)
+    batch_multiply_count = 0
 
     for batch_idx, (data, heur, target) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
+
+        if batch_multiply_count == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            batch_multiply_count = args.batch_multiplier
         
         data *= x_norm
         target *= y_norm
         heur *= y_norm
 
-        data_split = torch.split(data, args.batch_size, dim=0)
-        target_split = torch.split(target, args.batch_size, dim=0)
-        heur_split = torch.split(heur, args.batch_size, dim=0)
+        # data_split = torch.split(data, args.batch_size, dim=0)
+        # target_split = torch.split(target, args.batch_size, dim=0)
+        # heur_split = torch.split(heur, args.batch_size, dim=0)
+        output = model(data, heur)
+        loss = l(output, target) / args.batch_multiplier
+        #loss = cos_loss(output, target)
 
-        for i in range(len(data_split)):
-            output = model(data_split[i], heur_split[i])
-            loss = l(output, target_split[i])
-            #loss = cos_loss(output, target)
+        # optimizer.zero_grad()
+        loss.backward()
+        # optimizer.step()
+        batch_multiply_count -= 1
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        # for i in range(len(data)):
+        #     output = model(data_split[i], heur_split[i])
+        #     loss = l(output, target_split[i])
+        #     #loss = cos_loss(output, target)
 
-            #if torch.isnan(loss).any() or torch.isinf(loss).any():
-            #    assert False, "Nan is detected"
+        #     optimizer.zero_grad()
+        #     loss.backward()
+        #     optimizer.step()
+
+        #     #if torch.isnan(loss).any() or torch.isinf(loss).any():
+        #     #    assert False, "Nan is detected"
 
         if batch_idx % args.log_interval == 0 and do_print:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -162,11 +176,12 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
 def training_model(args, model, device, val_data_num, do_print=False, early_stopping_patience=3):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    train_kwargs = {'batch_size': args.batch_size*args.load_minibatch_multiplier, 'shuffle': True}
+    # train_kwargs = {'batch_size': args.batch_size*args.load_minibatch_multiplier, 'shuffle': True}
+    train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 96,
+        cuda_kwargs = {'num_workers': 32,
                        'pin_memory': True, 
                        'persistent_workers': True}
 

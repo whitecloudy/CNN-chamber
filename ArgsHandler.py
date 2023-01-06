@@ -9,8 +9,10 @@ def init_args():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch-size', type=int, default=256, metavar='N',
                         help='input batch size for training (default: 256)')
-    parser.add_argument('--load-minibatch-multiplier', type=int, default=1, metavar='N',
-                        help='loading batch size multiplier(default: 40)')
+    parser.add_argument('--batch-multiplier', type=int, default=1, metavar='N',
+                        help='input batch size multiplier for training (default: 1)')
+    # parser.add_argument('--load-minibatch-multiplier', type=int, default=1, metavar='N',
+    #                     help='loading batch size multiplier(default: 40)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',

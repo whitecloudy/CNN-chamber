@@ -255,6 +255,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = test(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
         scheduler.step()
+        torch.cuda.empty_cache()
 
         if do_print:
             print("<< Train Loader >>")
@@ -287,13 +288,13 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
                 break
 
         # renew dataset
-        training_dataset = dataset_handler.training_dataset
-        test_dataset = dataset_handler.test_dataset
-        training_test_dataset = dataset_handler.training_test_dataset
+        # training_dataset = dataset_handler.training_dataset
+        # test_dataset = dataset_handler.test_dataset
+        # training_test_dataset = dataset_handler.training_test_dataset
         
-        train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
-        train_test_loader = torch.utils.data.DataLoader(training_test_dataset, **test_kwargs)
-        valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+        # train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
+        # train_test_loader = torch.utils.data.DataLoader(training_test_dataset, **test_kwargs)
+        # valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
         if args.dry_run:
             break

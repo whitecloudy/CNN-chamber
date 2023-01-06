@@ -261,6 +261,10 @@ class DatasetHandler:
         self.training_test_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, self.normalize)
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 
+        global data_segments
+
+        del data_segments
+
 
 def main():
     prepare_dataset(12, 1)

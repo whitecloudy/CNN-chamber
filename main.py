@@ -18,7 +18,6 @@ from CachefileHandler import save_cache, load_cache
 from DataExchanger import DataExchanger
 
 
-
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
@@ -112,7 +111,7 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
 
     test_unable_heur = 0
 
-    batch_len = len(test_loader)/10
+    batch_len = len(test_loader)
 
     l = torch.nn.MSELoss(reduction='mean')
     
@@ -147,24 +146,24 @@ def test(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
             if batch_len <= batch_idx:
                 break
 
-    test_loss = test_loss.cpu()
-    test_heur_loss = test_heur_loss.cpu()
-    test_mmse_loss = test_mmse_loss.cpu()
+        test_loss = test_loss.cpu()
+        test_heur_loss = test_heur_loss.cpu()
+        test_mmse_loss = test_mmse_loss.cpu()
 
-    test_cos_loss = test_cos_loss.cpu()
-    test_heur_cos_loss = test_heur_cos_loss.cpu()
-    test_mmse_cos_loss = test_mmse_cos_loss.cpu()
-    
-    test_loss /= batch_len
-    test_loss = float(test_loss)
-    test_cos_loss /= batch_len
-    test_cos_loss = float(test_cos_loss)
+        test_cos_loss = test_cos_loss.cpu()
+        test_heur_cos_loss = test_heur_cos_loss.cpu()
+        test_mmse_cos_loss = test_mmse_cos_loss.cpu()
+        
+        test_loss /= batch_len
+        test_loss = float(test_loss)
+        test_cos_loss /= batch_len
+        test_cos_loss = float(test_cos_loss)
 
-    test_heur_loss /= batch_len
-    test_mmse_loss /= batch_len
+        test_heur_loss /= batch_len
+        test_mmse_loss /= batch_len
 
-    test_heur_cos_loss /= batch_len
-    test_mmse_cos_loss /= batch_len
+        test_heur_cos_loss /= batch_len
+        test_mmse_cos_loss /= batch_len
 
     if do_print:
         print('\nAverage loss: {:.6f}, Huristic Average Loss: {:.6f}, MMSE Average Loss: {:.6f}, Unable heur : {:.2f}%\n'.format(

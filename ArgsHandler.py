@@ -11,8 +11,6 @@ def init_args():
                         help='input batch size for training (default: 256)')
     parser.add_argument('--batch-multiplier', type=int, default=1, metavar='N',
                         help='input batch size multiplier for training (default: 1)')
-    # parser.add_argument('--load-minibatch-multiplier', type=int, default=1, metavar='N',
-    #                     help='loading batch size multiplier(default: 40)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
@@ -45,13 +43,10 @@ def init_args():
                         help='Early stopping patience')
     parser.add_argument('--model', type=str, default="Net",
                         help='Select Model name')
-    parser.add_argument('--aug1', type=int, default=1,
-                        help='Augmentation 1 level')  
-    parser.add_argument('--aug2', type=int, default=1,
-                        help='Augmentation 2 level')                                      
+    parser.add_argument('--aug-ratio', type=float, default=0.0, metavar='M',
+                        help='Augmenation Ratio(default: 0.0)')
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
-    
 
 
     global args

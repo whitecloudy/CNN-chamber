@@ -15,6 +15,32 @@ data_segments = []
 total_div_len = 40
 dry_run_len = 10
 
+def calculate_mmse(data, C_h, C_w):
+    data_dim = data.dim()-1
+    data_split = torch.tensor_split(data, (6, 7), dim=(data_dim))
+    S = data_split[0]
+    y = data_split[1]
+
+    S = torch.tensor_split(S, 2, dim=(data_dim-2))
+    S_t = ((S[0] + S[1]*1j).clone().detach()).type(torch.complex128)
+    S_t = torch.squeeze(S_t, dim=(data_dim-2))
+
+    y = torch.tensor_split(y, 2, dim=(data_dim-2))
+    y_t = ((y[0] + y[1]*1j).clone().detach()).type(torch.complex128)
+    y_t = torch.squeeze(y_t, dim=(data_dim-2))
+
+    SH = torch.conj(torch.transpose(S_t, data_dim-2, data_dim-1))
+    C_h_SH = torch.matmul(C_h, SH)
+    S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(torch.matmul(S_t, C_h), SH) + C_w)
+    #C_h_SH = SH
+    #S_Ch_SH_minus_Cw_inv = torch.inverse(torch.matmul(S, SH))
+    
+    mmse_result = torch.matmul(C_h_SH, S_Ch_SH_minus_Cw_inv)
+    #mmse_result = torch.matmul(S_Ch_SH_minus_Cw_inv, C_h_SH)
+    h_hat = torch.squeeze(torch.matmul(mmse_result, y_t))
+
+    return h_hat
+
 def prepare_dataset(row_size, multiply, dry_run=False):
     for i in range(total_div_len):
         if dry_run:
@@ -31,11 +57,9 @@ def prepare_dataset(row_size, multiply, dry_run=False):
         print(len(data_filename))
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_para=None):
+    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
         self.multiply = multiply
         self.data_size = data_size
-        self.aug_para = aug_para
-        self.aug_multiply = 1
         
         print(len(data_filename))
         cache_filename_list = [(data_filename[i], ) for i in num_list]
@@ -60,15 +84,10 @@ class BeamDataset(Dataset):
         self.x_list = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
         self.h_list = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
         self.y_list = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
-
-        if aug_para is None:
-            self.aug_multiply = 1
-        else:
-            for aug in aug_para:
-                self.aug_multiply *= aug
-        
+     
         self.MMSE_para = MMSE_para
         self.normalize = normalize
+        self.aug_ratio = aug_ratio
 
     def calculate_normalize(self):
         x_mean = 0
@@ -153,33 +172,16 @@ class BeamDataset(Dataset):
         h_aug_vector = np.ones(6, dtype=np.complex128)
         y_aug_vector = np.ones((6,1), dtype=np.complex128)
 
-        if self.aug_para[0] != 1:
-            rand_val = np.random.randint(self.aug_para[0])
-            #zero_do_rand_val = np.random.randint(2)
-            zero_do_rand_val = 0
-            if rand_val != 0 or zero_do_rand_val != 0:
-                fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[0])) 
-                random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[0]))
+        if np.random.rand() < self.aug_ratio:
+            shift_val_1 = cmath.rect(1, 2*cmath.pi*(np.random.rand()))
+            
+            shift_val_2 = cmath.rect(1, 2*cmath.pi*(np.random.rand()))
 
-                shift_val = fix_shift * random_shift
-             
-                x_aug_vector[6:8] *= shift_val
-                h_aug_vector *= shift_val
-                y_aug_vector *= shift_val
-        
-        if self.aug_para[1] != 1:
-            rand_val = np.random.randint(self.aug_para[1])
-            zero_do_rand_val = np.random.randint(2)
-            if rand_val != 0 or zero_do_rand_val != 0:
-                fix_shift = cmath.rect(1, 2*cmath.pi*(rand_val/self.aug_para[1])) 
-                random_shift = cmath.rect(1, 2*cmath.pi*(np.random.rand()/self.aug_para[1]))
-
-                shift_val = fix_shift * random_shift
-
-                x_aug_vector[0:6] *= shift_val
-                h_aug_vector *= shift_val.conjugate()
-                y_aug_vector *= shift_val.conjugate()
-        
+            x_aug_vector[6:8] *= shift_val_1
+            x_aug_vector[0:6] *= shift_val_2
+            h_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
+            y_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
+       
         x *= x_aug_vector
         d = np.split(x, [7,], axis=1)
         d[1] = abs(d[1].real) + abs(d[1].imag)*1j
@@ -189,48 +191,30 @@ class BeamDataset(Dataset):
 
         return x, h, y
 
+    def __len__(self):
+        return int(self.total_len)
 
-    def get_data(self, idx):
-        # i = 0
-        # j = 0
-        # while True:
-        #     length = self.len_list[i]
-        #     if idx < length: 
-        #         j = idx
-        #         break
-        #     else:
-        #         idx -= length
-        #         i += 1
-
-        # x = self.data_list[i][0][j]
-        # h = self.data_list[i][1][j]
-        # y = self.data_list[i][2][j]
-
+    def __getitem__(self, idx):
         x = self.x_list[idx]
         h = self.h_list[idx]
         y = self.y_list[idx]
-
-        if self.aug_para is not None:
+        
+        if self.aug_ratio != None:
             x, h, y = self.do_aug(x, h, y)
-
-        return x, h, y
-
-
-    def __len__(self):
-        return int(self.total_len * self.aug_multiply)
-
-    def __getitem__(self, idx):
-        x, h, y = self.get_data(int(idx/self.aug_multiply))
 
         x = torch.FloatTensor(np.append(np.expand_dims(x.real, axis=0), np.expand_dims(x.imag, axis=0), axis=0))
         y = torch.FloatTensor(np.append(y.real, y.imag)).reshape(12,)
         h = torch.FloatTensor(np.append(h.real, h.imag)).reshape(12,)
 
+        # x = torch.tensor(x, dtype=torch.cdouble)
+        # h = torch.tensor(h, dtype=torch.cdouble).reshape(6,)
+        # y = torch.tensor(y, dtype=torch.cdouble).reshape(6,)
+
         return x, h, y
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_para=None):
+    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_ratio=None):
         self.multiply = multiply
         self.data_div = data_div
         self.val_data_num = val_data_num
@@ -239,7 +223,8 @@ class DatasetHandler:
         self.training_dataset = None
         self.training_test_dataset = None
         self.test_dataset = None
-        self.aug_para = aug_para
+
+        self.aug_ratio = aug_ratio
         
         self.prepare_dataset()
 
@@ -260,20 +245,28 @@ class DatasetHandler:
             else:
                 nums_for_training += step_num_list
                 
-        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_para=self.aug_para)#, self.normalize)
+        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
         self.training_test_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, self.normalize)
         self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
 
-        global data_segments
-
-        del data_segments
-
 
 def main():
-    prepare_dataset(12, 1)
+    prepare_dataset(12, 1, dry_run=True)
     dataset_handler = DatasetHandler(data_div=5, val_data_num=1, row_size=12)
-    dataset_handler.training_dataset.getMMSEpara()
+    test_d = dataset_handler.test_dataset
+
+    test_kwargs = {'batch_size': 256}
+
+    loader = torch.utils.data.DataLoader(test_d, **test_kwargs)
+
+    for x, h, y in loader:
+        print(x.shape)
+        random = torch.rand(256, 12, 8, dtype=torch.complex128)
+        random = random/random.abs()
+        print(random.abs())
+        #print(random)
+        break
 
     import gc
     gc.collect()

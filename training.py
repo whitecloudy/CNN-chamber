@@ -24,7 +24,7 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
 
-    batch_len = len(train_loader)
+    batch_len = int(len(train_loader)/20)
     batch_multiply_count = args.batch_multiplier
     optimizer.zero_grad()
 
@@ -52,6 +52,9 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
                 epoch, batch_idx * len(data), batch_len * len(data),
                 100. * batch_idx / batch_len, loss.item()))
         if args.dry_run:
+            break
+
+        if batch_len < batch_idx:
             break
     
     optimizer.step()

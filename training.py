@@ -65,21 +65,21 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 
 def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
     model.eval()
-    test_loss = torch.tensor(0.0, device=device)
-    test_heur_loss = torch.tensor(0.0, device=device)
-    test_mmse_loss = torch.tensor(0.0, device=device)
-
-    test_cos_loss = torch.tensor(0.0, device=device)
-    test_heur_cos_loss = torch.tensor(0.0, device=device)
-    test_mmse_cos_loss = torch.tensor(0.0, device=device)
-
-    test_unable_heur = 0
-
-    batch_len = len(test_loader)
-
-    l = torch.nn.MSELoss(reduction='mean')
-    
     with torch.no_grad():
+        test_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_heur_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_mmse_loss = torch.tensor(0.0, device=device, require_grad=False)
+
+        test_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_heur_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_mmse_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
+
+        test_unable_heur = 0
+
+        batch_len = len(test_loader)
+
+        l = torch.nn.MSELoss(reduction='mean')
+    
         for batch_idx, (data, heur, target) in enumerate(test_loader):
             data, target, heur = data.to(device), target.to(device), heur.to(device)
             
@@ -89,8 +89,8 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
             output = model(data, heur)
             output /= y_norm
 
-            test_loss += l(output, target)
-            test_cos_loss += cos_loss(output, target)
+            test_loss += l(output, target).item()
+            test_cos_loss += cos_loss(output, target).item()
 
             data /= x_norm
             heur /= y_norm
@@ -100,27 +100,25 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
             mmse = calculate_mmse(data, mmse_para[0], mmse_para[1])
             mmse = torch.cat((mmse.real, mmse.imag), dim=1)
 
-            test_heur_loss += l(heur, target)
-            test_mmse_loss += l(mmse, target)
+            test_heur_loss += l(heur, target).item()
+            test_mmse_loss += l(mmse, target).item()
 
-            test_heur_cos_loss += cos_loss(heur, target)
-            test_mmse_cos_loss += cos_loss(mmse, target)
+            test_heur_cos_loss += cos_loss(heur, target).item()
+            test_mmse_cos_loss += cos_loss(mmse, target).item()
 
             if batch_len <= batch_idx:
                 break
 
-        test_loss = test_loss.cpu()
-        test_heur_loss = test_heur_loss.cpu()
-        test_mmse_loss = test_mmse_loss.cpu()
+        test_loss = float(test_loss.cpu().item())
+        test_heur_loss = float(test_heur_loss.cpu().item())
+        test_mmse_loss = float(test_mmse_loss.cpu().item())
 
-        test_cos_loss = test_cos_loss.cpu()
-        test_heur_cos_loss = test_heur_cos_loss.cpu()
-        test_mmse_cos_loss = test_mmse_cos_loss.cpu()
+        test_cos_loss = float(test_cos_loss.cpu().item())
+        test_heur_cos_loss = float(test_heur_cos_loss.cpu().item())
+        test_mmse_cos_loss = float(test_mmse_cos_loss.cpu().item())
         
         test_loss /= batch_len
-        test_loss = float(test_loss)
         test_cos_loss /= batch_len
-        test_cos_loss = float(test_cos_loss)
 
         test_heur_loss /= batch_len
         test_mmse_loss /= batch_len

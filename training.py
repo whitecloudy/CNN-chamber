@@ -24,7 +24,9 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     model.train()
     l = torch.nn.MSELoss(reduction='mean')
 
-    batch_len = int(len(train_loader)/20)
+    # batch_len = int(len(train_loader)/20)
+    batch_len = int(len(train_loader))
+
     batch_multiply_count = args.batch_multiplier
     optimizer.zero_grad()
 
@@ -140,7 +142,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 8,
+        cuda_kwargs = {'num_workers': 24,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -264,7 +266,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     from pathlib import Path
 
     if args.save_model:
-        torch.save(opt_model_para, str(Path.home())+"/data/cache/"+args.log+'.pt')
+        torch.save(opt_model_para, "cache/"+args.log+'.pt')
 
 
 def main():

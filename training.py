@@ -29,14 +29,14 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     batch_len = int(len(train_loader))
 
     batch_multiply_count = args.batch_multiplier
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
 
     for batch_idx, (data, heur, target) in enumerate(train_loader):
         data, target, heur = data.to(device), target.to(device), heur.to(device)
 
         if batch_multiply_count == 0:
             optimizer.step()
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             batch_multiply_count = args.batch_multiplier
         
         data *= x_norm

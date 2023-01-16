@@ -66,13 +66,13 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
 def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=False):
     model.eval()
     with torch.no_grad():
-        test_loss = torch.tensor(0.0, device=device, require_grad=False)
-        test_heur_loss = torch.tensor(0.0, device=device, require_grad=False)
-        test_mmse_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_loss = torch.tensor(0.0, device=device, requires_grad=False)
+        test_heur_loss = torch.tensor(0.0, device=device, requires_grad=False)
+        test_mmse_loss = torch.tensor(0.0, device=device, requires_grad=False)
 
-        test_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
-        test_heur_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
-        test_mmse_cos_loss = torch.tensor(0.0, device=device, require_grad=False)
+        test_cos_loss = torch.tensor(0.0, device=device, requires_grad=False)
+        test_heur_cos_loss = torch.tensor(0.0, device=device, requires_grad=False)
+        test_mmse_cos_loss = torch.tensor(0.0, device=device, requires_grad=False)
 
         test_unable_heur = 0
 
@@ -259,7 +259,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
             break
 
     if logfile is not None:
-        logfile.writerow("FIN")
+        logfile.write("FIN\n")
         logfile.close()
 
     from pathlib import Path

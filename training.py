@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler, prepare_dataset, calculate_mmse
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
+import gc
 
 from ModelHandler import model_selector
 
@@ -229,10 +230,10 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         if logCSV is not None:
             logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
 
-
         if epoch is args.epochs:
             break
 
+        gc.collect()
         if args.save_model and min_cos_loss > test_cos_loss:
             min_cos_loss = test_cos_loss
             opt_model_para = copy.deepcopy(model.state_dict())

@@ -142,7 +142,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 24,
+        cuda_kwargs = {'num_workers': 16,
                        'pin_memory': True, 
                        'persistent_workers': True}
 
@@ -261,6 +261,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
             break
 
     if logfile is not None:
+        logfile.writerow("FIN")
         logfile.close()
 
     from pathlib import Path

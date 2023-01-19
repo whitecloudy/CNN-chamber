@@ -141,7 +141,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
 
     if use_cuda:
-        cuda_kwargs = {'num_workers': 16,
+        cuda_kwargs = {'num_workers': args.worker,
                        'pin_memory': True, 
                        'persistent_workers': True}
 

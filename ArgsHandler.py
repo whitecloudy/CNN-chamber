@@ -47,6 +47,8 @@ def init_args():
                         help='Augmenation Ratio(default: 0.0)')
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
+    parser.add_argument('--worker', type=int, default=8,
+                        help='number of worker')
 
 
     global args

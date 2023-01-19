@@ -15,6 +15,9 @@ data_segments = []
 total_div_len = 40
 dry_run_len = 10
 
+shuffle_candidate = np.array([[0, 1, 2, 3, 4, 5], [2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]])
+
+
 def calculate_mmse(data, C_h, C_w):
     data_dim = data.dim()-1
     data_split = torch.tensor_split(data, (6, 7), dim=(data_dim))
@@ -47,7 +50,7 @@ def prepare_dataset(row_size, multiply, dry_run=False):
             if i == dry_run_len:
                 break
 
-        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver114.bin'
+        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
 
         loaded_data = load_cache(filename)
 
@@ -165,7 +168,6 @@ class BeamDataset(Dataset):
                 save_cache(self.MMSE_para, cache_name)
 
         return self.MMSE_para
-
     
     def do_aug(self, x, h, y):
         x_aug_vector = np.ones(8, dtype=np.complex128)
@@ -181,13 +183,18 @@ class BeamDataset(Dataset):
             x_aug_vector[0:6] *= shift_val_2
             h_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
             y_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
+
+            shuffle_order = shuffle_candidate[np.random.randint(4)]
        
             x *= x_aug_vector
-            d = np.split(x, [7,], axis=1)
-            d[1] = abs(d[1].real) + abs(d[1].imag)*1j
-            x = np.append(d[0], d[1], axis=1)
+            x[:,[7]] = abs(x[:,[7]].real) + abs(x[:,[7]].imag)*1j
+            x[:,[0,1,2,3,4,5]] = x[:,shuffle_order]
+
             y *= y_aug_vector
+            y = y[shuffle_order]
+
             h *= h_aug_vector
+            h = h[shuffle_order]
 
         return x, h, y
 

@@ -182,12 +182,12 @@ class BeamDataset(Dataset):
             h_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
             y_aug_vector *= (shift_val_2.conjugate() * shift_val_1)
        
-        x *= x_aug_vector
-        d = np.split(x, [7,], axis=1)
-        d[1] = abs(d[1].real) + abs(d[1].imag)*1j
-        x = np.append(d[0], d[1], axis=1)
-        y *= y_aug_vector
-        h *= h_aug_vector
+            x *= x_aug_vector
+            d = np.split(x, [7,], axis=1)
+            d[1] = abs(d[1].real) + abs(d[1].imag)*1j
+            x = np.append(d[0], d[1], axis=1)
+            y *= y_aug_vector
+            h *= h_aug_vector
 
         return x, h, y
 

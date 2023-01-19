@@ -32,7 +32,7 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
     optimizer.zero_grad(set_to_none=True)
 
     for batch_idx, (data, heur, target) in enumerate(train_loader):
-        data, target, heur = data.to(device), target.to(device), heur.to(device)
+        data, target, heur = data.to(device, non_blocking=True), target.to(device, non_blocking=True), heur.to(device, non_blocking=True)
 
         if batch_multiply_count == 0:
             optimizer.step()
@@ -82,7 +82,7 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
         l = torch.nn.MSELoss(reduction='mean')
     
         for batch_idx, (data, heur, target) in enumerate(test_loader):
-            data, target, heur = data.to(device), target.to(device), heur.to(device)
+            data, target, heur = data.to(device, non_blocking=True), target.to(device, non_blocking=True), heur.to(device, non_blocking=True)
             
             data *= x_norm
             heur *= y_norm

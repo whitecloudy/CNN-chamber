@@ -183,7 +183,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     
     mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
 
-    scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     logCSV = None
     if args.log is not None:
         logfile = open("result/" + args.log+'.csv', "w")
@@ -213,7 +213,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
             print("<< Test Loader >>")
         test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = validation(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
 
-        scheduler.step()
+        # scheduler.step()
         with torch.cuda.device('cuda:'+str(args.gpunum)):
             torch.cuda.empty_cache()
 

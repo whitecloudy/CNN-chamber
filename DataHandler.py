@@ -4,7 +4,6 @@ import cmath
 import numpy as np
 import copy
 
-DATADIR = "data/*"
 
 class dataParser:
     """
@@ -36,6 +35,7 @@ class dataParser:
     def copySrc(cls, src):
         return cls(src.phase_vec, src.data_kind, src.round_num, src.noise_std, src.tag_sig)
 
+DATADIR = "data/"
 
 class DataHandler:
     """
@@ -43,8 +43,11 @@ class DataHandler:
     :len: length of data lists
     :getitem : return list of datas
     """
-    def __init__(self):
-        filelist = glob.glob(DATADIR)
+    def __init__(self, training : bool):
+        if training:
+            filelist = glob.glob(DATADIR+'training_dataset/*')
+        else:
+            filelist = glob.glob(DATADIR+'validation_dataset/*')
         self.data_dict = {}
         self.nosub_data_dict = {}
         self.opt_data_dict = {}
@@ -161,11 +164,11 @@ class DataHandler:
 
 
 def main():
-    data = DataHandler()
+    data = DataHandler(False)
 
-    for d, l, k in data:
-        for amp in abs(l):
-            print(float(amp), ",", len(d))
+    keys = data.getKey()
+
+    print(data.evalLabel(list(keys)[0]))
 
 if __name__ == "__main__":
     main()

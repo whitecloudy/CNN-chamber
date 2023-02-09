@@ -9,8 +9,7 @@ from CachefileHandler import load_cache, save_cache, make_cache_hashname
 
 from torch.utils.data import Dataset
 
-data_filename = []
-data_segments = []
+
 
 total_div_len = 40
 dry_run_len = 10
@@ -45,52 +44,70 @@ def calculate_mmse(data, C_h, C_w):
     return h_hat
 
 def prepare_dataset(row_size, multiply, dry_run=False):
+    training_data_filename = []
+    training_data_segments = []
+    validation_data_filename = []
+    validation_data_segments = []
+    
     for i in range(total_div_len):
         if dry_run:
             if i == dry_run_len:
                 break
 
-        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
+        filename = 'training_'+str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
 
         loaded_data = load_cache(filename)
 
         # data will be loaded in (x, h, y)
-        data_filename.append(filename)
-        data_segments.append(loaded_data)
-        print(len(data_filename))
+        training_data_filename.append(filename)
+        training_data_segments.append(loaded_data)
+
+        filename = 'validation_'+str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
+
+        loaded_data = load_cache(filename)
+
+        # data will be loaded in (x, h, y)
+        validation_data_filename.append(filename)
+        validation_data_segments.append(loaded_data)
+        print(len(validation_data_filename))
+
+    
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
-        self.multiply = multiply
+    def __init__(self, data_filename_list : list[str], data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
         self.data_size = data_size
         
-        print(len(data_filename))
-        cache_filename_list = [(data_filename[i], ) for i in num_list]
-        self.hashname = make_cache_hashname(cache_filename_list)
+        print(len(data_filename_list))
+        self.hashname = make_cache_hashname(data_filename_list)
         self.x_list = np.empty((0, self.data_size, 8))
         self.h_list = np.empty((0, self.data_size))
         self.y_list = np.empty((0, self.data_size, 1))
         #self.len_list = []
         self.total_len = 0
 
-        for i, idx in enumerate(num_list):
-            # data will be loaded in (x, h, y)
-            # self.data_list[0] = np.append(self.data_list[0], data_segments[idx][0], axis=0)
-            # self.data_list[1] = np.append(self.data_list[1], data_segments[idx][1], axis=0)
-            # self.data_list[2] = np.append(self.data_list[2], data_segments[idx][2], axis=0)
-            #self.len_list.append(len(data_segments[idx][0]))
-            #self.total_len += self.len_list[i]
-            self.total_len += len(data_segments[idx][0])
-            #print(self.len_list[i])
-            print(self.total_len)
+        if data_segments is None:
+            self.load_data_segments(data_filename_list)
+        else:
+            self.x_list = data_segments[0]
+            self.h_list = data_segments[1]
+            self.y_list = data_segments[2]
 
-        self.x_list = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
-        self.h_list = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
-        self.y_list = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
-     
+        self.total_len = len(self.x_list)
+
         self.MMSE_para = MMSE_para
         self.normalize = normalize
         self.aug_ratio = aug_ratio
+
+    def get_data_segments(self) -> tuple:
+        return (self.x_list, self.h_list, self.y_list)
+    
+    def load_data_segments(self, filename_list : list[str]):
+        data_segments = [load_cache(filename) for filename in filename_list]
+
+        self.x_list = np.concatenate([data_segments[i][0] for i in range(len(data_segments))], axis=0)
+        self.h_list = np.concatenate([data_segments[i][1] for i in range(len(data_segments))], axis=0)
+        self.y_list = np.concatenate([data_segments[i][2] for i in range(len(data_segments))], axis=0)
+
 
     def calculate_normalize(self):
         x_mean = 0
@@ -201,7 +218,7 @@ class BeamDataset(Dataset):
     def __len__(self):
         return int(self.total_len)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         x = self.x_list[idx]
         h = self.h_list[idx]
         y = self.y_list[idx]
@@ -221,47 +238,34 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_ratio=None):
+    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False):
         self.multiply = multiply
-        self.data_div = data_div
-        self.val_data_num = val_data_num
         self.row_size = row_size
 
         self.training_dataset = None
         self.training_test_dataset = None
-        self.test_dataset = None
+        self.validation_dataset = None
 
         self.aug_ratio = aug_ratio
         
-        self.prepare_dataset()
+        self.prepare_dataset(dry_run)
 
-    def prepare_dataset(self):
-        data_div = self.data_div
-        val_data_num = self.val_data_num
+    def prepare_dataset(self, dry_run=False):
+        if dry_run:
+            total_div_len = 10
 
-        nums_for_training = []
-        nums_for_validation = []
-
-        data_div_len = len(data_filename)
-
-        for i in range(data_div):
-            step_num_list = list(range(int(i * data_div_len/data_div), int((i+1) * data_div_len/data_div)))
-
-            if i == val_data_num:
-                nums_for_validation += step_num_list
-            else:
-                nums_for_training += step_num_list
-                
-        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
+        training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+             
+        self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
-        self.training_test_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, self.normalize)
-        self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
+        self.validation_dataset = BeamDataset(validation_filename_list, data_size=self.row_size, normalize=self.normalize)
+        self.training_test_dataset = BeamDataset(training_filename_list, self.training_dataset.get_data_segments(), self.row_size, self.normalize)
 
 
 def main():
-    prepare_dataset(12, 1, dry_run=True)
-    dataset_handler = DatasetHandler(data_div=5, val_data_num=1, row_size=12)
-    test_d = dataset_handler.test_dataset
+    dataset_handler = DatasetHandler(row_size=12, dry_run=True)
+    test_d = dataset_handler.validation_dataset
 
     test_kwargs = {'batch_size': 256}
 

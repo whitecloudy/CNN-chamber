@@ -16,8 +16,10 @@ from itertools import permutations
 from CachefileHandler import save_cache, load_cache
 
 
-global_data_handler = DataHandler()
+global_data_handler = DataHandler(True)
 global_key_list = list(global_data_handler.getKey())
+global_validation_data_handler = DataHandler(True)
+global_validation_key_list = list(global_data_handler.getKey())
 
 
 class dataParser:
@@ -199,18 +201,17 @@ class DataProcessor:
         return x_result, h_result, y_result
 
 
-def work_for_preparing(data_c, i, multiply, row_size):
+def work_for_preparing(data_c, i, multiply, row_size, prefix=''):
     print("<<<", i, " ", row_size, ">>>")
     data_list = data_c.prepare_data(multiply=multiply, row_size=row_size)
-    filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver114.bin'
+    filename = prefix + str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
     save_cache(data_list, filename)
     print("Done ", i, " ", row_size)
 
     return [0, ]
 
 
-def main():
-    key_list = global_key_list
+def make_data(data_handler : DataHandler, key_list : list, prefix : str):
     trainable_key_list = []
     error_thres = 0.40
     data_div = 40
@@ -264,12 +265,18 @@ def main():
 
             para_tuples = []
             for row_size in range(6, 13):
-                para_tuples.append((data1, i, multiply, row_size))
+                para_tuples.append((data1, i, multiply, row_size, prefix))
 
             for row_size in range(6, 13):
-                para_tuples.append((data2, i+1, multiply, row_size))
+                para_tuples.append((data2, i+1, multiply, row_size, prefix))
 
             do_work(work_for_preparing, para_tuples, 16)
+
+def main():
+    make_data(global_data_handler, global_key_list, "training_")
+
+    make_data(global_validation_data_handler, global_validation_key_list, "validation_")
+    
 
 
 if __name__ == "__main__":

@@ -138,7 +138,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     train_kwargs = {'batch_size': args.batch_size, 'shuffle': True}
-    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': True}
+    test_kwargs = {'batch_size': args.test_batch_size, 'shuffle': False}
 
     if use_cuda:
         cuda_kwargs = {'num_workers': args.worker,
@@ -148,7 +148,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    dataset_handler = DatasetHandler(data_div=args.data_div, val_data_num=val_data_num, row_size=args.W, aug_ratio=args.aug_ratio)
+    dataset_handler = DatasetHandler(row_size=args.W, aug_ratio=args.aug_ratio, dry_run=args.dry_run)
 
     training_dataset = dataset_handler.training_dataset
     if do_print:
@@ -156,13 +156,13 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     training_test_dataset = dataset_handler.training_test_dataset
     if do_print:
         print("training Test Dataset : ", len(training_test_dataset))
-    test_dataset = dataset_handler.test_dataset
+    validation_dataset = dataset_handler.validation_dataset
     if do_print:
-        print("Test Dataset : ", len(test_dataset))
+        print("Test Dataset : ", len(validation_dataset))
 
     train_loader = torch.utils.data.DataLoader(training_dataset, **train_kwargs)
     train_test_loader = torch.utils.data.DataLoader(training_test_dataset, **test_kwargs)
-    valid_test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
+    valid_test_loader = torch.utils.data.DataLoader(validation_dataset, **test_kwargs)
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
@@ -286,8 +286,6 @@ def main():
         else:
             print("No gpu number")
             exit(1)
-
-    prepare_dataset(args.W, 1, args.dry_run)
 
     device = torch.device("cuda:"+str(args.gpunum) if use_cuda else "cpu")
 

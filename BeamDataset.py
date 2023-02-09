@@ -10,10 +10,6 @@ from CachefileHandler import load_cache, save_cache, make_cache_hashname
 from torch.utils.data import Dataset
 
 
-
-total_div_len = 40
-dry_run_len = 10
-
 shuffle_candidate = np.array([[0, 1, 2, 3, 4, 5], [2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]])
 
 
@@ -224,6 +220,8 @@ class DatasetHandler:
     def prepare_dataset(self, dry_run=False):
         if dry_run:
             total_div_len = 10
+        else:
+            total_div_len = 40
 
         training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
         validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]

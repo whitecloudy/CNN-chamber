@@ -42,36 +42,7 @@ def calculate_mmse(data, C_h, C_w):
     h_hat = torch.squeeze(torch.matmul(mmse_result, y_t))
 
     return h_hat
-
-def prepare_dataset(row_size, multiply, dry_run=False):
-    training_data_filename = []
-    training_data_segments = []
-    validation_data_filename = []
-    validation_data_segments = []
-    
-    for i in range(total_div_len):
-        if dry_run:
-            if i == dry_run_len:
-                break
-
-        filename = 'training_'+str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
-
-        loaded_data = load_cache(filename)
-
-        # data will be loaded in (x, h, y)
-        training_data_filename.append(filename)
-        training_data_segments.append(loaded_data)
-
-        filename = 'validation_'+str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
-
-        loaded_data = load_cache(filename)
-
-        # data will be loaded in (x, h, y)
-        validation_data_filename.append(filename)
-        validation_data_segments.append(loaded_data)
-        print(len(validation_data_filename))
-
-    
+     
 
 class BeamDataset(Dataset):
     def __init__(self, data_filename_list : list[str], data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):

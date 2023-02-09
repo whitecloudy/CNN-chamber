@@ -4,7 +4,7 @@ import torch
 import torch.optim as optim
 import time
 from torch.optim.lr_scheduler import StepLR
-from BeamDataset import DatasetHandler, prepare_dataset, calculate_mmse
+from BeamDataset import DatasetHandler, calculate_mmse
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
 import gc

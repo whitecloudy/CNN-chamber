@@ -41,7 +41,7 @@ def calculate_mmse(data, C_h, C_w):
      
 
 class BeamDataset(Dataset):
-    def __init__(self, data_filename_list : list[str], data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
+    def __init__(self, data_filename_list : list, data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
         self.data_size = data_size
         
         print(len(data_filename_list))
@@ -68,7 +68,7 @@ class BeamDataset(Dataset):
     def get_data_segments(self) -> tuple:
         return (self.x_list, self.h_list, self.y_list)
     
-    def load_data_segments(self, filename_list : list[str]):
+    def load_data_segments(self, filename_list : list):
         data_segments = [load_cache(filename) for filename in filename_list]
 
         self.x_list = np.concatenate([data_segments[i][0] for i in range(len(data_segments))], axis=0)
@@ -185,7 +185,7 @@ class BeamDataset(Dataset):
     def __len__(self):
         return int(self.total_len)
 
-    def __getitem__(self, idx) -> tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+    def __getitem__(self, idx) -> tuple:
         x = self.x_list[idx]
         h = self.h_list[idx]
         y = self.y_list[idx]

@@ -18,8 +18,8 @@ from CachefileHandler import save_cache, load_cache
 
 global_data_handler = DataHandler(True)
 global_key_list = list(global_data_handler.getKey())
-global_validation_data_handler = DataHandler(True)
-global_validation_key_list = list(global_data_handler.getKey())
+global_validation_data_handler = DataHandler(False)
+global_validation_key_list = list(global_validation_data_handler.getKey())
 
 
 class dataParser:
@@ -90,8 +90,8 @@ class dataParser:
 
 
 class DataProcessor:
-    def __init__(self, multiply=1, key_list=global_key_list):
-        self.data_handler = global_data_handler
+    def __init__(self, data_handler, key_list, multiply=1):
+        self.data_handler = data_handler
         self.output_len_list = []
         self.output_idx_list = []
         self.key_list = key_list
@@ -211,16 +211,14 @@ def work_for_preparing(data_c, i, multiply, row_size, prefix=''):
     return [0, ]
 
 
-def make_data(data_handler : DataHandler, key_list : list, prefix : str):
+def make_data(data_handler : DataHandler, key_list : list, prefix : str, error_thres : float, data_div=40):
     trainable_key_list = []
-    error_thres = 0.40
-    data_div = 40
     seed = 1
     multiply = 1
 
     for key in key_list:
         try:
-            error, length = global_data_handler.evalLabel(key)
+            error, length = data_handler.evalLabel(key)
         except KeyError:
             print(key, " : It is not Usable")
             continue
@@ -229,6 +227,8 @@ def make_data(data_handler : DataHandler, key_list : list, prefix : str):
                 trainable_key_list.append(key[0:3])
             else:
                 print(key, " is Too much Error : ", error)
+        else:
+            print(key, " has not enough data")
     print(len(trainable_key_list))
     
     random.seed(seed)
@@ -260,8 +260,8 @@ def make_data(data_handler : DataHandler, key_list : list, prefix : str):
         step_key2 = trainable_key_list[start_idx: end_idx]
 
         if True:
-            data1 = DataProcessor(key_list=step_key1)
-            data2 = DataProcessor(key_list=step_key2)
+            data1 = DataProcessor(data_handler, key_list=step_key1)
+            data2 = DataProcessor(data_handler, key_list=step_key2)
 
             para_tuples = []
             for row_size in range(6, 13):
@@ -273,9 +273,9 @@ def make_data(data_handler : DataHandler, key_list : list, prefix : str):
             do_work(work_for_preparing, para_tuples, 16)
 
 def main():
-    make_data(global_data_handler, global_key_list, "training_")
+    make_data(global_data_handler, global_key_list, "training_", 0.4)
 
-    make_data(global_validation_data_handler, global_validation_key_list, "validation_")
+    make_data(global_validation_data_handler, global_validation_key_list, "validation_", 1.0)
     
 
 

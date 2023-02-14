@@ -167,19 +167,19 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # Load Normalization
-    norm_vector = load_cache(args.log + '.norm')
+    norm_vector = load_cache("cache/"+args.log + '.norm', True)
     if norm_vector is None:
         norm_vector = training_dataset.getNormPara()
-        save_cache(norm_vector, args.log + '.norm')
+        save_cache(norm_vector, "cache/"+args.log + '.norm', True)
 
     x_norm_vector = norm_vector[0].to(device)
     y_norm_vector = norm_vector[1].to(device)
 
     # mmse_para = (C_h, C_w)
-    mmse_para = load_cache(args.log + '.mmse')
+    mmse_para = load_cache("cache/"+args.log + '.mmse', True)
     if mmse_para is None:
         mmse_para = training_dataset.getMMSEpara()
-        save_cache(mmse_para, args.log + '.mmse')
+        save_cache(mmse_para, "cache/"+args.log + '.mmse', True)
     
     mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
 

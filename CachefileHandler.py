@@ -19,17 +19,20 @@ def make_cache_hashname(datas, header=None, tail=None):
     return cache_filename
 
 
-def save_cache(save_data, cache_filename):
+def save_cache(save_data, cache_filename, new_cache_dir=False):
     import os
     from pathlib import Path
-    cache_path = str(Path.home()) + "/ssddata/cache/" + cache_filename
-
+    if new_cache_dir:
+        cache_path = cache_filename
+    else:
+        cache_path = str(Path.home()) + "/ssddata/cache/" + cache_filename
+        
     with open(cache_path, "wb") as cache_file:
         pickle.dump(save_data, cache_file)
 
 
-def load_cache(cache_filename, testing=False):
-    if testing:
+def load_cache(cache_filename, new_cache_dir=False):
+    if new_cache_dir:
         cache_path = cache_filename
     else:
         cache_path = str(Path.home()) + "/ssddata/cache/" + cache_filename

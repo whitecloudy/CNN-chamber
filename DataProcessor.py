@@ -204,7 +204,7 @@ class DataProcessor:
 def work_for_preparing(data_c, i, multiply, row_size, prefix=''):
     print("<<<", i, " ", row_size, ">>>")
     data_list = data_c.prepare_data(multiply=multiply, row_size=row_size)
-    filename = prefix + str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
+    filename = prefix + str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111_reverse.bin'
     save_cache(data_list, filename)
     print("Done ", i, " ", row_size)
 

@@ -38,10 +38,11 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
             batch_multiply_count = args.batch_multiplier
-        
-        data *= x_norm
-        target *= y_norm
-        heur *= y_norm
+
+        with torch.no_grad():
+            data *= x_norm
+            target *= y_norm
+            heur *= y_norm
 
         output = model(data, heur)
         loss = l(output, target) / args.batch_multiplier

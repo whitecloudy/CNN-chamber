@@ -6,7 +6,7 @@ import time
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler, calculate_mmse
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
-from Cosine_sim_loss import make_complex
+from Cosine_sim_loss import make_complex, MSE_normalize
 import gc
 
 from ModelHandler import model_selector
@@ -23,7 +23,7 @@ def complexTensor2FloatTensor(data):
 
 def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, do_print=False):
     model.train()
-    l = torch.nn.MSELoss(reduction='mean')
+    l = torch.nn.MSELoss(reduction='none')
 
     # batch_len = int(len(train_loader)/20)
     batch_len = int(len(train_loader))
@@ -45,7 +45,10 @@ def train(args, model, device, train_loader, optimizer, epoch, x_norm, y_norm, d
             heur *= y_norm
 
         output = model(data, heur)
-        loss = l(output, target) / args.batch_multiplier
+        loss = l(output, target)
+
+        loss = MSE_normalize(loss, target) / args.batch_multiplier
+
         #loss = cos_loss(output, target)
 
         loss.backward()

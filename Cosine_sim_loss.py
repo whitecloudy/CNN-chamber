@@ -16,11 +16,19 @@ def cosine_sim(x1_c, x2_c, dim=1):
     cos_sim = dot_pro/(x1_abs * x2_abs)
 
     return abs(torch.mean(cos_sim, dim=dim))
-
+    
 
 def MSE(x1, x2, dim=1):
     error = x1 - x2
     return torch.mean(error * error, dim=dim)
+
+
+def MSE_normalize(mse_loss, label):
+    label_abs = torch.sum(torch.abs(make_complex(label)), dim=1)
+    mse_loss = torch.sum(mse_loss, dim=1)
+    normalized_mse = torch.sum(mse_loss / label_abs)
+
+    return normalized_mse
 
 
 def complex_cosine_sim_loss(x1, x2):

@@ -223,8 +223,11 @@ class DatasetHandler:
         else:
             total_div_len = 40
 
-        training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
-        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+
              
         self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()

@@ -6,7 +6,7 @@ import time
 from torch.optim.lr_scheduler import StepLR
 from BeamDataset import DatasetHandler, calculate_mmse
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
-from Cosine_sim_loss import make_complex, MSE_normalize
+from Cosine_sim_loss import make_complex, MSE_normalize, norm_amp_loss, spread_complex
 import gc
 
 from ModelHandler import model_selector
@@ -95,7 +95,8 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
             output /= y_norm
 
             test_loss += l(output, target).item()
-            test_cos_loss += cos_loss(output, target).item()
+            # test_cos_loss += cos_loss(output, target).item()
+            test_cos_loss += norm_amp_loss(output, target).item()
 
             data /= x_norm
             heur /= y_norm
@@ -103,13 +104,15 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
             #mmse = torch.transpose(torch.mm(mmse_para, torch.transpose(make_complex(heur), 0, 1)), 0, 1)
             #mmse = torch.cat((mmse.real, mmse.imag), 1)
             mmse = calculate_mmse(data, mmse_para[0], mmse_para[1])
-            mmse = torch.cat((mmse.real, mmse.imag), dim=1)
+            mmse = spread_complex(mmse)
 
             test_heur_loss += l(heur, target).item()
             test_mmse_loss += l(mmse, target).item()
 
-            test_heur_cos_loss += cos_loss(heur, target).item()
-            test_mmse_cos_loss += cos_loss(mmse, target).item()
+            # test_heur_cos_loss += cos_loss(heur, target).item()
+            # test_mmse_cos_loss += cos_loss(mmse, target).item()
+            test_heur_cos_loss += norm_amp_loss(heur, target).item()
+            test_mmse_cos_loss += norm_amp_loss(mmse, target).item()
 
             if batch_len <= batch_idx:
                 break

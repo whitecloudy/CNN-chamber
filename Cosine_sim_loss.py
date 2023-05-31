@@ -1,10 +1,15 @@
 import torch
 import torch.nn.functional as F
 
-def make_complex(x):
-    input2 = torch.tensor_split(x, 2, dim=1)
+def make_complex(x : torch.Tensor):
+    input2 = torch.tensor_split(x, 2, dim=(x.dim()-1))
     complex_x = torch.complex(input2[0], input2[1])
     return complex_x
+
+
+def spread_complex(x):
+    result_tensor = torch.cat((x.real, x.imag), dim=(x.dim()-1))
+    return result_tensor
 
 
 def cosine_sim(x1_c, x2_c, dim=1):
@@ -16,6 +21,28 @@ def cosine_sim(x1_c, x2_c, dim=1):
     cos_sim = dot_pro/(x1_abs * x2_abs)
 
     return abs(torch.mean(cos_sim, dim=dim))
+
+def amp_expectation(x_c : torch.Tensor, label_c : torch.Tensor):
+    x_c_norm = x_c / torch.abs(x_c)
+
+    amp_expected = torch.abs(torch.sum((x_c_norm.conj() * label_c), dim=(x_c_norm.dim()-1)))
+    
+    return amp_expected
+
+
+def norm_amp_expectation(x_c : torch.Tensor, label_c : torch.Tensor):
+    amp_expected = amp_expectation(x_c, label_c)
+
+    max_amp_expected = torch.sum(abs(label_c), dim=(label_c.dim()-1))
+
+    return amp_expected/max_amp_expected
+
+
+def norm_amp_loss(x : torch.Tensor, label : torch.Tensor):
+    x_c = make_complex(x)
+    label_c = make_complex(label)
+
+    return torch.mean(norm_amp_expectation(x_c, label_c))
     
 
 def MSE(x1, x2, dim=1):
@@ -24,7 +51,8 @@ def MSE(x1, x2, dim=1):
 
 
 def MSE_normalize(mse_loss, label):
-    label_abs = torch.sum(torch.abs(make_complex(label)), dim=1)
+    complexed_label = make_complex(label)
+    label_abs = torch.sum(torch.abs(complexed_label), dim=1)
     mse_loss = torch.sum(mse_loss, dim=1)
     normalized_mse = torch.sum(mse_loss / label_abs)
 

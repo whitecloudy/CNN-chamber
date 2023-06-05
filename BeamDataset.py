@@ -5,7 +5,7 @@ import numpy as np
 import ArgsHandler
 import Proc
 import cmath
-from CachefileHandler import load_cache, save_cache, make_cache_hashname
+from CachefileHandler import load_cache, make_cache_hashname
 
 from torch.utils.data import Dataset
 
@@ -134,22 +134,15 @@ class BeamDataset(Dataset):
 
     def getNormPara(self):
         if self.normalize is None:
-            cache_name = self.hashname + '.norm'
-            self.normalize = load_cache(cache_name)
-            if self.normalize is None:
-                x, h, y = self.calculate_normalize()
-                self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
-                save_cache(self.normalize, cache_name)
+            x, h, y = self.calculate_normalize()
+            self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
+
         return self.normalize
 
     def getMMSEpara(self):
         if self.MMSE_para is None:
-            cache_name = self.hashname + '.mmse'
-            self.MMSE_para = load_cache(cache_name)
-            if self.MMSE_para is None:
-                C_h, C_w = self.calculate_MMSE_parameter()
-                self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128).to("cpu"), torch.tensor(C_w, dtype=torch.complex128).to("cpu"))
-                save_cache(self.MMSE_para, cache_name)
+            C_h, C_w = self.calculate_MMSE_parameter()
+            self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128).to("cpu"), torch.tensor(C_w, dtype=torch.complex128).to("cpu"))
 
         return self.MMSE_para
     

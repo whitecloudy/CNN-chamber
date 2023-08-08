@@ -41,8 +41,12 @@ def init_args():
                         help='Row Size')
     parser.add_argument('--patience', type=int, default=3,
                         help='Early stopping patience')
+    parser.add_argument('--dataset-postfix', type=str, default='',
+                        help='Dataset filename postfix')
     parser.add_argument('--model', type=str, default="Net",
                         help='Select Model name')
+    parser.add_argument('--noise-add', type=float, default=0.0,
+                        help='Add noise level')
     parser.add_argument('--aug-ratio', type=float, default=0.0, metavar='M',
                         help='Augmenation Ratio(default: 0.0)')
     parser.add_argument('--test', type=str, default=None,

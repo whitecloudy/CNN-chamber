@@ -155,7 +155,7 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    dataset_handler = DatasetHandler(row_size=args.W, aug_ratio=args.aug_ratio, dry_run=args.dry_run)
+    dataset_handler = DatasetHandler(row_size=args.W, aug_ratio=args.aug_ratio, dry_run=args.dry_run, postfix=args.dataset_postfix)
 
     training_dataset = dataset_handler.training_dataset
     if do_print:

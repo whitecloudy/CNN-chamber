@@ -198,7 +198,7 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False):
+    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False, postfix=''):
         self.multiply = multiply
         self.row_size = row_size
 
@@ -207,6 +207,10 @@ class DatasetHandler:
         self.validation_dataset = None
 
         self.aug_ratio = aug_ratio
+
+        self.postfix = postfix
+        if self.postfix != '' and self.postfix[0] != '_':
+            self.postfix = '_'+self.postfix
         
         self.prepare_dataset(dry_run)
 
@@ -218,10 +222,13 @@ class DatasetHandler:
 
         # training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
         # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
-        training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
-        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
+        training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+self.postfix for i in range(total_div_len)]
+        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+self.postfix for i in range(total_div_len)]
 
-             
         self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
         self.validation_dataset = BeamDataset(validation_filename_list, data_size=self.row_size, normalize=self.normalize)

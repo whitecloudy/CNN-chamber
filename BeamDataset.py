@@ -12,6 +12,9 @@ from torch.utils.data import Dataset
 
 shuffle_candidate = np.array([[0, 1, 2, 3, 4, 5], [2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]])
 
+sample_per_bit = (2e6/5)/40e3
+sample_per_preamble = sample_per_bit*6
+
 
 def calculate_mmse(data, C_h, C_w):
     data_dim = data.dim()-1
@@ -41,7 +44,7 @@ def calculate_mmse(data, C_h, C_w):
      
 
 class BeamDataset(Dataset):
-    def __init__(self, data_filename_list : list, data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
+    def __init__(self, data_filename_list : list, data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None, add_noise=None):
         self.data_size = data_size
         
         print(len(data_filename_list))
@@ -64,6 +67,7 @@ class BeamDataset(Dataset):
         self.MMSE_para = MMSE_para
         self.normalize = normalize
         self.aug_ratio = aug_ratio
+        self.add_noise = add_noise
 
     def get_data_segments(self) -> tuple:
         return (self.x_list, self.h_list, self.y_list)
@@ -146,6 +150,37 @@ class BeamDataset(Dataset):
 
         return self.MMSE_para
     
+    def calculate_least_square(self, x):
+        x_split = np.split(x, [6,7,8], axis=1)
+
+        W = np.matrix(x_split[0])
+        A = np.matrix(x_split[1])
+
+        W_inv = (W.H*W).I * W.H
+
+        ls_result = np.array(W_inv * A).reshape((6,))
+
+        return ls_result
+    
+    def calculate_add_noise(self, x):
+        noise_std_real = np.random.random_sample((self.data_size, )) * self.add_noise
+        noise_std_imag = np.random.random_sample((self.data_size, )) * self.add_noise
+
+        corr_added_noise = np.random.normal(0, ((noise_std_real**2)/sample_per_preamble)**0.5) + \
+                            np.random.normal(0, ((noise_std_imag**2)/sample_per_preamble)**0.5)*1j
+        
+        x[:, 6] += corr_added_noise
+        x[:, 7] = (x[:, 7].real**2 + noise_std_real**2)**0.5 + \
+                    (x[:, 7].imag**2 + noise_std_imag**2)**0.5*1j
+
+        h = self.calculate_least_square(x)
+
+        return x, h
+    
+
+    # 0~5 : Phase vector
+    # 6 : corr
+    # 7 : noise std
     def do_aug(self, x, h, y):
         x_aug_vector = np.ones(8, dtype=np.complex128)
         h_aug_vector = np.ones(6, dtype=np.complex128)
@@ -179,12 +214,15 @@ class BeamDataset(Dataset):
         return int(self.total_len)
 
     def __getitem__(self, idx) -> tuple:
-        x = self.x_list[idx]
-        h = self.h_list[idx]
-        y = self.y_list[idx]
+        x = self.x_list[idx].copy()
+        h = self.h_list[idx].copy()
+        y = self.y_list[idx].copy()
         
         if self.aug_ratio != None:
             x, h, y = self.do_aug(x, h, y)
+            
+        if self.add_noise != None:
+            x, h = self.calculate_add_noise(x)
 
         x = torch.FloatTensor(np.append(np.expand_dims(x.real, axis=0), np.expand_dims(x.imag, axis=0), axis=0))
         y = torch.FloatTensor(np.append(y.real, y.imag)).reshape(12,)
@@ -198,7 +236,7 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False, postfix=''):
+    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False, add_noise=None, val_noise=None, postfix=''):
         self.multiply = multiply
         self.row_size = row_size
 
@@ -207,6 +245,8 @@ class DatasetHandler:
         self.validation_dataset = None
 
         self.aug_ratio = aug_ratio
+        self.add_noise = add_noise
+        self.val_noise = val_noise
 
         self.postfix = postfix
         if self.postfix != '' and self.postfix[0] != '_':
@@ -216,7 +256,7 @@ class DatasetHandler:
 
     def prepare_dataset(self, dry_run=False):
         if dry_run:
-            total_div_len = 10
+            total_div_len = 5
         else:
             total_div_len = 40
 
@@ -226,30 +266,27 @@ class DatasetHandler:
         # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
         # training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
         # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
-        training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+self.postfix for i in range(total_div_len)]
+        training_filename_list = ['training_'+str(self.row_size)+"_"+str(1)+"_"+str(i)+self.postfix for i in range(total_div_len)]
         validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+self.postfix for i in range(total_div_len)]
 
-        self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
+        self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio, add_noise=self.add_noise)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
-        self.validation_dataset = BeamDataset(validation_filename_list, data_size=self.row_size, normalize=self.normalize)
-        self.training_test_dataset = BeamDataset(training_filename_list, self.training_dataset.get_data_segments(), self.row_size, self.normalize)
+        self.validation_dataset = BeamDataset(validation_filename_list, data_size=self.row_size, normalize=self.normalize, add_noise=self.val_noise)
+        self.training_test_dataset = BeamDataset(training_filename_list, self.training_dataset.get_data_segments(), self.row_size, self.normalize, add_noise=self.add_noise)
 
 
 def main():
-    dataset_handler = DatasetHandler(row_size=12, dry_run=True)
-    test_d = dataset_handler.validation_dataset
+    dataset_handler = DatasetHandler(row_size=12, dry_run=True, aug_ratio=1.0, add_noise=0.0003, postfix='20230529_with_preamble_ver111.bin')
 
-    test_kwargs = {'batch_size': 256}
+    x = dataset_handler.training_dataset.x_list[0]
+    h = dataset_handler.training_dataset.h_list[0]
+    y = dataset_handler.training_dataset.y_list[0]
 
-    loader = torch.utils.data.DataLoader(test_d, **test_kwargs)
+    print(abs(x))
 
-    for x, h, y in loader:
-        print(x.shape)
-        random = torch.rand(256, 12, 8, dtype=torch.complex128)
-        random = random/random.abs()
-        print(random.abs())
-        #print(random)
-        break
+    x, h, y = dataset_handler.training_dataset.do_aug(x, h, y)
+
+    print(abs(x))
 
     import gc
     gc.collect()

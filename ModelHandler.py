@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 
 
-def model_selector(model_name, row_size):
+def model_selector(model_name, row_size, fine_tuning_freeze=0):
     if model_name == 'Net':
         return Net(row_size)
     elif model_name == 'conv1d':
@@ -20,7 +20,7 @@ def model_selector(model_name, row_size):
     elif model_name == 'transformer_encoder_only':
         return Net_transformer_encoder_only(row_size)
     elif model_name == 'transformer_ls_stack':
-        return Net_transformer_encoder_LSstack(row_size)
+        return Net_transformer_encoder_LSstack(row_size, fine_tuning_freeze)
     else:
         return -1
 
@@ -369,7 +369,7 @@ class Net_transformer_encoder_only(nn.Module):
 
 
 class Net_transformer_encoder_LSstack(nn.Module):
-    def __init__(self, row_size):
+    def __init__(self, row_size, fine_tuning_freeze=0):
         super(Net_transformer_encoder_LSstack, self).__init__()
         self.first_fc = nn.Linear(16, 8 * 8)
         self.d_model = 64
@@ -388,6 +388,8 @@ class Net_transformer_encoder_LSstack(nn.Module):
         torch.nn.init.xavier_uniform_(self.fc1.weight)
         torch.nn.init.xavier_uniform_(self.fc2.weight)
         torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
+
+        self.model_freezing(fine_tuning_freeze)
 
 
     def forward(self, x, x1):
@@ -416,3 +418,26 @@ class Net_transformer_encoder_LSstack(nn.Module):
         #output = F.log_softmax(x, dim=1)
 
         return x
+    
+    def model_freezing(self, freeze_num):
+        if freeze_num == 0:
+            pass
+        elif freeze_num == 1:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+        elif freeze_num == 2:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+            
+            self.transformer_encoder.requires_grad_(False)
+            self.dropout1.requires_grad_(False)
+        elif freeze_num == 3:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+            
+            self.transformer_encoder.requires_grad_(False)
+            self.dropout1.requires_grad_(False)
+
+            self.fc1.requires_grad_(False)
+            self.batch3.requires_grad_(False)
+            self.dropout2.requires_grad_(False)

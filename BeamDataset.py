@@ -5,17 +5,15 @@ import numpy as np
 import ArgsHandler
 import Proc
 import cmath
-from CachefileHandler import load_cache, save_cache, make_cache_hashname
+from CachefileHandler import load_cache, make_cache_hashname
 
 from torch.utils.data import Dataset
 
-data_filename = []
-data_segments = []
-
-total_div_len = 40
-dry_run_len = 10
 
 shuffle_candidate = np.array([[0, 1, 2, 3, 4, 5], [2, 1, 0, 5, 4, 3], [3, 4, 5, 0, 1, 2], [5, 4, 3, 2, 1, 0]])
+
+sample_per_bit = (2e6/5)/40e3
+sample_per_preamble = sample_per_bit*6
 
 
 def calculate_mmse(data, C_h, C_w):
@@ -43,54 +41,44 @@ def calculate_mmse(data, C_h, C_w):
     h_hat = torch.squeeze(torch.matmul(mmse_result, y_t))
 
     return h_hat
-
-def prepare_dataset(row_size, multiply, dry_run=False):
-    for i in range(total_div_len):
-        if dry_run:
-            if i == dry_run_len:
-                break
-
-        filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver111.bin'
-
-        loaded_data = load_cache(filename)
-
-        # data will be loaded in (x, h, y)
-        data_filename.append(filename)
-        data_segments.append(loaded_data)
-        print(len(data_filename))
+     
 
 class BeamDataset(Dataset):
-    def __init__(self, multiply, num_list, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None):
-        self.multiply = multiply
+    def __init__(self, data_filename_list : list, data_segments=None, data_size=6, normalize=None, MMSE_para=None, aug_ratio=None, add_noise=None):
         self.data_size = data_size
         
-        print(len(data_filename))
-        cache_filename_list = [(data_filename[i], ) for i in num_list]
-        self.hashname = make_cache_hashname(cache_filename_list)
+        print(len(data_filename_list))
+        self.hashname = make_cache_hashname(data_filename_list)
         self.x_list = np.empty((0, self.data_size, 8))
         self.h_list = np.empty((0, self.data_size))
         self.y_list = np.empty((0, self.data_size, 1))
         #self.len_list = []
         self.total_len = 0
 
-        for i, idx in enumerate(num_list):
-            # data will be loaded in (x, h, y)
-            # self.data_list[0] = np.append(self.data_list[0], data_segments[idx][0], axis=0)
-            # self.data_list[1] = np.append(self.data_list[1], data_segments[idx][1], axis=0)
-            # self.data_list[2] = np.append(self.data_list[2], data_segments[idx][2], axis=0)
-            #self.len_list.append(len(data_segments[idx][0]))
-            #self.total_len += self.len_list[i]
-            self.total_len += len(data_segments[idx][0])
-            #print(self.len_list[i])
-            print(self.total_len)
+        if data_segments is None:
+            self.load_data_segments(data_filename_list)
+        else:
+            self.x_list = data_segments[0]
+            self.h_list = data_segments[1]
+            self.y_list = data_segments[2]
 
-        self.x_list = np.concatenate([data_segments[i][0] for i in num_list], axis=0)
-        self.h_list = np.concatenate([data_segments[i][1] for i in num_list], axis=0)
-        self.y_list = np.concatenate([data_segments[i][2] for i in num_list], axis=0)
-     
+        self.total_len = len(self.x_list)
+
         self.MMSE_para = MMSE_para
         self.normalize = normalize
         self.aug_ratio = aug_ratio
+        self.add_noise = add_noise
+
+    def get_data_segments(self) -> tuple:
+        return (self.x_list, self.h_list, self.y_list)
+    
+    def load_data_segments(self, filename_list : list):
+        data_segments = [load_cache(filename) for filename in filename_list]
+
+        self.x_list = np.concatenate([data_segments[i][0] for i in range(len(data_segments))], axis=0)
+        self.h_list = np.concatenate([data_segments[i][1] for i in range(len(data_segments))], axis=0)
+        self.y_list = np.concatenate([data_segments[i][2] for i in range(len(data_segments))], axis=0)
+
 
     def calculate_normalize(self):
         x_mean = 0
@@ -150,25 +138,49 @@ class BeamDataset(Dataset):
 
     def getNormPara(self):
         if self.normalize is None:
-            cache_name = self.hashname + '.norm'
-            self.normalize = load_cache(cache_name)
-            if self.normalize is None:
-                x, h, y = self.calculate_normalize()
-                self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
-                save_cache(self.normalize, cache_name)
+            x, h, y = self.calculate_normalize()
+            self.normalize = (torch.FloatTensor(x), torch.FloatTensor([y, y]).reshape(12,))
+
         return self.normalize
 
     def getMMSEpara(self):
         if self.MMSE_para is None:
-            cache_name = self.hashname + '.mmse'
-            self.MMSE_para = load_cache(cache_name)
-            if self.MMSE_para is None:
-                C_h, C_w = self.calculate_MMSE_parameter()
-                self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128).to("cpu"), torch.tensor(C_w, dtype=torch.complex128).to("cpu"))
-                save_cache(self.MMSE_para, cache_name)
+            C_h, C_w = self.calculate_MMSE_parameter()
+            self.MMSE_para = (torch.tensor(C_h, dtype=torch.complex128).to("cpu"), torch.tensor(C_w, dtype=torch.complex128).to("cpu"))
 
         return self.MMSE_para
     
+    def calculate_least_square(self, x):
+        x_split = np.split(x, [6,7,8], axis=1)
+
+        W = np.matrix(x_split[0])
+        A = np.matrix(x_split[1])
+
+        W_inv = (W.H*W).I * W.H
+
+        ls_result = np.array(W_inv * A).reshape((6,))
+
+        return ls_result
+    
+    def calculate_add_noise(self, x):
+        noise_std_real = np.random.random_sample((self.data_size, )) * self.add_noise
+        noise_std_imag = np.random.random_sample((self.data_size, )) * self.add_noise
+
+        corr_added_noise = np.random.normal(0, ((noise_std_real**2)/sample_per_preamble)**0.5) + \
+                            np.random.normal(0, ((noise_std_imag**2)/sample_per_preamble)**0.5)*1j
+        
+        x[:, 6] += corr_added_noise
+        x[:, 7] = (x[:, 7].real**2 + noise_std_real**2)**0.5 + \
+                    (x[:, 7].imag**2 + noise_std_imag**2)**0.5*1j
+
+        h = self.calculate_least_square(x)
+
+        return x, h
+    
+
+    # 0~5 : Phase vector
+    # 6 : corr
+    # 7 : noise std
     def do_aug(self, x, h, y):
         x_aug_vector = np.ones(8, dtype=np.complex128)
         h_aug_vector = np.ones(6, dtype=np.complex128)
@@ -201,13 +213,16 @@ class BeamDataset(Dataset):
     def __len__(self):
         return int(self.total_len)
 
-    def __getitem__(self, idx):
-        x = self.x_list[idx]
-        h = self.h_list[idx]
-        y = self.y_list[idx]
+    def __getitem__(self, idx) -> tuple:
+        x = self.x_list[idx].copy()
+        h = self.h_list[idx].copy()
+        y = self.y_list[idx].copy()
         
         if self.aug_ratio != None:
             x, h, y = self.do_aug(x, h, y)
+            
+        if self.add_noise != None:
+            x, h = self.calculate_add_noise(x)
 
         x = torch.FloatTensor(np.append(np.expand_dims(x.real, axis=0), np.expand_dims(x.imag, axis=0), axis=0))
         y = torch.FloatTensor(np.append(y.real, y.imag)).reshape(12,)
@@ -221,59 +236,57 @@ class BeamDataset(Dataset):
 
 
 class DatasetHandler:
-    def __init__(self,  multiply=1, data_div=5, val_data_num=1, row_size=6, aug_ratio=None):
+    def __init__(self,  multiply=1, row_size=6, aug_ratio=None, dry_run=False, add_noise=None, val_noise=None, postfix=''):
         self.multiply = multiply
-        self.data_div = data_div
-        self.val_data_num = val_data_num
         self.row_size = row_size
 
         self.training_dataset = None
         self.training_test_dataset = None
-        self.test_dataset = None
+        self.validation_dataset = None
 
         self.aug_ratio = aug_ratio
+        self.add_noise = add_noise
+        self.val_noise = val_noise
+
+        self.postfix = postfix
+        if self.postfix != '' and self.postfix[0] != '_':
+            self.postfix = '_'+self.postfix
         
-        self.prepare_dataset()
+        self.prepare_dataset(dry_run)
 
-    def prepare_dataset(self):
-        data_div = self.data_div
-        val_data_num = self.val_data_num
+    def prepare_dataset(self, dry_run=False):
+        if dry_run:
+            total_div_len = 5
+        else:
+            total_div_len = 40
 
-        nums_for_training = []
-        nums_for_validation = []
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20220325_ver111.bin' for i in range(total_div_len)]
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin' for i in range(total_div_len)]
+        # training_filename_list = ['training_'+str(self.row_size)+"_"+str(3)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
+        # validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+'_20230529_with_preamble_ver111_noise2_0.0003.bin' for i in range(total_div_len)]
+        training_filename_list = ['training_'+str(self.row_size)+"_"+str(1)+"_"+str(i)+self.postfix for i in range(total_div_len)]
+        validation_filename_list = ['validation_'+str(self.row_size)+"_"+str(self.multiply)+"_"+str(i)+self.postfix for i in range(total_div_len)]
 
-        data_div_len = len(data_filename)
-
-        for i in range(data_div):
-            step_num_list = list(range(int(i * data_div_len/data_div), int((i+1) * data_div_len/data_div)))
-
-            if i == val_data_num:
-                nums_for_validation += step_num_list
-            else:
-                nums_for_training += step_num_list
-                
-        self.training_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, aug_ratio=self.aug_ratio)#, self.normalize)
+        self.training_dataset = BeamDataset(training_filename_list, data_size=self.row_size, aug_ratio=self.aug_ratio, add_noise=self.add_noise)#, self.normalize)
         self.normalize = self.training_dataset.getNormPara()
-        self.training_test_dataset = BeamDataset(self.multiply, nums_for_training, self.row_size, self.normalize)
-        self.test_dataset = BeamDataset(self.multiply, nums_for_validation, self.row_size, self.normalize)
+        self.validation_dataset = BeamDataset(validation_filename_list, data_size=self.row_size, normalize=self.normalize, add_noise=self.val_noise)
+        self.training_test_dataset = BeamDataset(training_filename_list, self.training_dataset.get_data_segments(), self.row_size, self.normalize, add_noise=self.add_noise)
 
 
 def main():
-    prepare_dataset(12, 1, dry_run=True)
-    dataset_handler = DatasetHandler(data_div=5, val_data_num=1, row_size=12)
-    test_d = dataset_handler.test_dataset
+    dataset_handler = DatasetHandler(row_size=12, dry_run=True, aug_ratio=1.0, add_noise=0.0003, postfix='20230529_with_preamble_ver111.bin')
 
-    test_kwargs = {'batch_size': 256}
+    x = dataset_handler.training_dataset.x_list[0]
+    h = dataset_handler.training_dataset.h_list[0]
+    y = dataset_handler.training_dataset.y_list[0]
 
-    loader = torch.utils.data.DataLoader(test_d, **test_kwargs)
+    print(abs(x))
 
-    for x, h, y in loader:
-        print(x.shape)
-        random = torch.rand(256, 12, 8, dtype=torch.complex128)
-        random = random/random.abs()
-        print(random.abs())
-        #print(random)
-        break
+    x, h, y = dataset_handler.training_dataset.do_aug(x, h, y)
+
+    print(abs(x))
 
     import gc
     gc.collect()

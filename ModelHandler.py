@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 
 
-def model_selector(model_name, row_size):
+def model_selector(model_name, row_size, fine_tuning_freeze=0):
     if model_name == 'Net':
         return Net(row_size)
     elif model_name == 'conv1d':
@@ -20,7 +20,9 @@ def model_selector(model_name, row_size):
     elif model_name == 'transformer_encoder_only':
         return Net_transformer_encoder_only(row_size)
     elif model_name == 'transformer_ls_stack':
-        return Net_transformer_encoder_LSstack(row_size)
+        return Net_transformer_encoder_LSstack(row_size, fine_tuning_freeze)
+    elif model_name == 'ls_only':
+        return Net_LSstack_Only(row_size)
     else:
         return -1
 
@@ -369,7 +371,7 @@ class Net_transformer_encoder_only(nn.Module):
 
 
 class Net_transformer_encoder_LSstack(nn.Module):
-    def __init__(self, row_size):
+    def __init__(self, row_size, fine_tuning_freeze=0):
         super(Net_transformer_encoder_LSstack, self).__init__()
         self.first_fc = nn.Linear(16, 8 * 8)
         self.d_model = 64
@@ -389,6 +391,8 @@ class Net_transformer_encoder_LSstack(nn.Module):
         torch.nn.init.xavier_uniform_(self.fc2.weight)
         torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
 
+        self.model_freezing(fine_tuning_freeze)
+
 
     def forward(self, x, x1):
         #x = torch.tensor_split(x, (7, ), dim=3)
@@ -406,6 +410,79 @@ class Net_transformer_encoder_LSstack(nn.Module):
         x = F.gelu(x)
         x = x.permute(1, 0, 2)
         x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = self.batch3(x)
+        x = F.leaky_relu(x)
+        x = self.dropout2(x)
+        x = self.fc2(x)
+        #x = torch.tanh(x)
+        #output = F.log_softmax(x, dim=1)
+
+        return x
+    
+    def model_freezing(self, freeze_num):
+        if freeze_num == 0:
+            pass
+        elif freeze_num == 1:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+        elif freeze_num == 2:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+            
+            self.transformer_encoder.requires_grad_(False)
+            self.dropout1.requires_grad_(False)
+        elif freeze_num == 3:
+            self.first_fc.requires_grad_(False)
+            self.heur_fc1.requires_grad_(False)
+            
+            self.transformer_encoder.requires_grad_(False)
+            self.dropout1.requires_grad_(False)
+
+            self.fc1.requires_grad_(False)
+            self.batch3.requires_grad_(False)
+            self.dropout2.requires_grad_(False)
+
+
+class Net_LSstack_Only(nn.Module):
+    def __init__(self, row_size):
+        super(Net_LSstack_Only, self).__init__()
+        # self.first_fc = nn.Linear(16, 8 * 8)
+        self.d_model = 64
+        # encoder = nn.TransformerEncoderLayer(d_model=self.d_model, nhead=8, dim_feedforward=256, dropout=0.1, activation="gelu")
+        # self.transformer_encoder = nn.TransformerEncoder(encoder, num_layers=3)
+        self.heur_fc1 = nn.Linear(12, 64)
+        self.dropout1 = nn.Dropout(0.1)
+        self.dropout2 = nn.Dropout(0.5)
+        self.batch3 = nn.BatchNorm1d(1024)
+        self.heur_batch = nn.BatchNorm1d(64)
+        self.fc1 = nn.Linear((1) * self.d_model, 1024) # 21 * 2 * 64
+        #self.fc1 = nn.Linear(row_size * 4 * 64, 1024) # 21 * 2 * 64
+        self.fc2 = nn.Linear(1024, 12)
+
+        # torch.nn.init.xavier_uniform_(self.first_fc.weight)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.xavier_uniform_(self.heur_fc1.weight)
+
+    def forward(self, x, x1):
+        #x = torch.tensor_split(x, (7, ), dim=3)
+        #x = x[0]
+        # x = torch.tensor_split(x, 2, dim=1)
+        # x = torch.cat((x[0], x[1]), dim=3)
+        # x = self.first_fc(x)
+        x1 = self.heur_fc1(x1)
+        x1 = torch.unsqueeze(x1, dim=1)
+        # x = torch.squeeze(x, dim=1)
+        # x = torch.cat((x, x1), dim=1)
+        # x = x.permute(1, 0, 2)
+        # #x = x * math.sqrt(self.d_model)
+        # x = self.transformer_encoder(x)
+        # x = F.gelu(x)
+        # x = x.permute(1, 0, 2)
+        # x = self.dropout1(x)
+        x = x1
         x = torch.flatten(x, 1)
         x = self.fc1(x)
         x = self.batch3(x)

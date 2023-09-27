@@ -141,6 +141,31 @@ def validation(model, device, test_loader, x_norm, y_norm, mmse_para, do_print=F
     return test_loss, float(test_heur_loss), float(test_mmse_loss), test_cos_loss, float(test_heur_cos_loss), float(test_mmse_cos_loss), test_unable_heur
 
 
+def validation_process(args, model, device, train_test_loader, valid_test_loader, epoch, x_norm_vector, y_norm_vector, mmse_para, logCSV=None, do_print=False):
+    start_time = time.time()
+    if do_print:
+        print("<< Test Loader >>")
+    test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = validation(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+
+    with torch.cuda.device('cuda:'+str(args.gpunum)):
+        torch.cuda.empty_cache()
+
+    if do_print:
+        print("<< Train Loader >>")
+    train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = validation(model, device, train_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
+    end_time = time.time()
+
+    consumed_time = end_time - start_time
+
+    if do_print:
+        print("Validation Consumed time: ", consumed_time)
+
+    if logCSV is not None:
+        logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
+
+    return test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable
+
+
 def training_model(args, model, device, val_data_num, do_print=False, early_stopping_patience=3):
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -173,20 +198,26 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    # Load Normalization
-    norm_vector = load_cache("cache/"+args.log + '.norm', True)
-    if norm_vector is None:
-        norm_vector = training_dataset.getNormPara()
+    if args.fine_tuning is None:
+        # Load Normalization
+        norm_vector = load_cache("cache/"+args.log + '.norm', True)
+        if norm_vector is None:
+            norm_vector = training_dataset.getNormPara()
+            save_cache(norm_vector, "cache/"+args.log + '.norm', True)
+
+        # mmse_para = (C_h, C_w)
+        mmse_para = load_cache("cache/"+args.log + '.mmse', True)
+        if mmse_para is None:
+            mmse_para = training_dataset.getMMSEpara()
+            save_cache(mmse_para, "cache/"+args.log + '.mmse', True)
+    else:
+        norm_vector = load_cache(args.fine_tuning + '.norm', True)
+        mmse_para = load_cache(args.fine_tuning + '.mmse', True)
         save_cache(norm_vector, "cache/"+args.log + '.norm', True)
+        save_cache(mmse_para, "cache/"+args.log + '.mmse', True)
 
     x_norm_vector = norm_vector[0].to(device)
     y_norm_vector = norm_vector[1].to(device)
-
-    # mmse_para = (C_h, C_w)
-    mmse_para = load_cache("cache/"+args.log + '.mmse', True)
-    if mmse_para is None:
-        mmse_para = training_dataset.getMMSEpara()
-        save_cache(mmse_para, "cache/"+args.log + '.mmse', True)
     
     mmse_para = (mmse_para[0].to(device), mmse_para[1].to(device))
 
@@ -205,37 +236,22 @@ def training_model(args, model, device, val_data_num, do_print=False, early_stop
     early_stopping_ctr = early_stopping_patience
     opt_model_para = None
 
+    # if fine tuning
+    if args.fine_tuning is not None:
+        validation_process(args, model, device, train_test_loader, valid_test_loader, 0, x_norm_vector, y_norm_vector, mmse_para, logCSV, do_print)
+        
     for epoch in range(1, args.epochs + 1):
         start_time = time.time()
         train(args, model, device, train_loader, optimizer, epoch, x_norm_vector, y_norm_vector, do_print)
         end_time = time.time()
 
         consumed_time = end_time - start_time
-
+        
         if do_print:
             print("Training Consumed time: ", consumed_time)
 
-        start_time = time.time()
-        if do_print:
-            print("<< Test Loader >>")
-        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = validation(model, device, valid_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
-
+        test_loss, test_heur_loss, test_mmse, test_cos_loss, test_heur_cos_loss, test_mmse_cos, test_unable = validation_process(args, model, device, train_test_loader, valid_test_loader, epoch, x_norm_vector, y_norm_vector, mmse_para, logCSV, do_print)
         scheduler.step()
-        with torch.cuda.device('cuda:'+str(args.gpunum)):
-            torch.cuda.empty_cache()
-
-        if do_print:
-            print("<< Train Loader >>")
-        train_loss, train_heur_loss, train_mmse, train_cos_loss, train_heur_cos_loss, train_mmse_cos, train_unable = validation(model, device, train_test_loader, x_norm_vector, y_norm_vector, mmse_para, do_print)
-        end_time = time.time()
-
-        consumed_time = end_time - start_time
-
-        if do_print:
-            print("Validation Consumed time: ", consumed_time)
-
-        if logCSV is not None:
-            logCSV.writerow([epoch, train_loss, test_loss, train_heur_loss, test_heur_loss, train_mmse, test_mmse, train_cos_loss, test_cos_loss, train_heur_cos_loss, test_heur_cos_loss, train_mmse_cos, test_mmse_cos, train_unable, test_unable])
 
         if epoch is args.epochs:
             break
@@ -297,10 +313,13 @@ def main():
     device = torch.device("cuda:"+str(args.gpunum) if use_cuda else "cpu")
 
     print(args.model)
-    model = model_selector(args.model, args.W).to(device)
+    model = model_selector(args.model, args.W, args.model_freeze).to(device)
+
+    if args.fine_tuning is not None:
+        with open(args.fine_tuning+'.pt','rb') as pt_file:
+            model.load_state_dict(torch.load(pt_file, map_location=device))
 
     training_model(args, model, device, args.val_data_num, True, early_stopping_patience=args.patience)
-
 
 if __name__ == '__main__':
     main()

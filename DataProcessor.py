@@ -16,8 +16,10 @@ from itertools import permutations
 from CachefileHandler import save_cache, load_cache
 
 
-global_data_handler = DataHandler()
+global_data_handler = DataHandler(True)
 global_key_list = list(global_data_handler.getKey())
+global_validation_data_handler = DataHandler(False)
+global_validation_key_list = list(global_validation_data_handler.getKey())
 
 
 class dataParser:
@@ -52,7 +54,6 @@ class dataParser:
 
         W = np.matrix(W)
         A = np.matrix(A)
-        
 
         H = self.cal_ls_estimator(W, A)
 
@@ -88,8 +89,7 @@ class dataParser:
 
 
 class DataProcessor:
-    def __init__(self, multiply=1, key_list=global_key_list):
-        self.data_handler = global_data_handler
+    def __init__(self, data_handler, key_list, multiply=1):
         self.output_len_list = []
         self.output_idx_list = []
         self.key_list = key_list
@@ -100,36 +100,15 @@ class DataProcessor:
         para_tuples = []
 
         # data augmentation
-        for data, label, key in self.data_handler:
+        for data, label, key in data_handler:
             if key[0:3] not in self.key_list:
                 continue
 
             if key[3] == ' directionalrefine':
                 continue
 
-            para_tuples.append((data, label, key))
-        
-        cache_file_name = self.make_cache_hashname(para_tuples, aug_para)
-
-        self.data_label_key_list = load_cache(cache_file_name)
-        if self.data_label_key_list is None:
-            self.data_label_key_list = do_work(data_augmentation, para_tuples, 16)
-            save_cache(self.data_label_key_list, cache_file_name)
-
-        gc.collect()
-
-        print("Data Augmentation Complete")
-        
-        """
-        # config normalize value
-        if normalize is None:
-            self.normalize = self.calculate_normalize()
-        else:
-            self.normalize = normalize
-        """
-
-        # prepare output data
-        # self.data_list = self.prepare_data(multiply)
+            self.data_label_key_list.append((data, label, key))
+            
 
     def make_cache_hashname(self, para_tuples, additional_tuples):
         import hashlib
@@ -199,27 +178,23 @@ class DataProcessor:
         return x_result, h_result, y_result
 
 
-def work_for_preparing(data_c, i, multiply, row_size):
+def work_for_preparing(data_c, i, multiply, row_size, prefix=''):
     print("<<<", i, " ", row_size, ">>>")
     data_list = data_c.prepare_data(multiply=multiply, row_size=row_size)
-    filename = str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20220325_ver114.bin'
+    filename = prefix + str(row_size)+"_"+str(multiply)+"_"+str(i)+'_20230529_with_preamble_ver111.bin'
     save_cache(data_list, filename)
     print("Done ", i, " ", row_size)
 
     return [0, ]
 
 
-def main():
-    key_list = global_key_list
+def make_data(data_handler : DataHandler, key_list : list, prefix : str, error_thres : float, data_div=40, multiply=1):
     trainable_key_list = []
-    error_thres = 0.40
-    data_div = 40
     seed = 1
-    multiply = 1
 
     for key in key_list:
         try:
-            error, length = global_data_handler.evalLabel(key)
+            error, length = data_handler.evalLabel(key)
         except KeyError:
             print(key, " : It is not Usable")
             continue
@@ -228,6 +203,8 @@ def main():
                 trainable_key_list.append(key[0:3])
             else:
                 print(key, " is Too much Error : ", error)
+        else:
+            print(key, " has not enough data")
     print(len(trainable_key_list))
     
     random.seed(seed)
@@ -240,7 +217,7 @@ def main():
     start_idx = 0
     end_idx = 0
 
-    for i in range(0, data_div, 2):
+    for i in range(0, data_div, 4):
         print("\nNow working!!")
         print(i)
         print()
@@ -258,18 +235,47 @@ def main():
             end_idx += 1
         step_key2 = trainable_key_list[start_idx: end_idx]
 
+        start_idx = end_idx
+        end_idx += key_step_len
+        if key_remain > 0:
+            key_remain -= 1
+            end_idx += 1
+        step_key3 = trainable_key_list[start_idx: end_idx]
+
+        start_idx = end_idx
+        end_idx += key_step_len
+        if key_remain > 0:
+            key_remain -= 1
+            end_idx += 1
+        step_key4 = trainable_key_list[start_idx: end_idx]
+
         if True:
-            data1 = DataProcessor(key_list=step_key1)
-            data2 = DataProcessor(key_list=step_key2)
+            data1 = DataProcessor(data_handler, key_list=step_key1)
+            data2 = DataProcessor(data_handler, key_list=step_key2)
+            data3 = DataProcessor(data_handler, key_list=step_key3)
+            data4 = DataProcessor(data_handler, key_list=step_key4)
 
             para_tuples = []
             for row_size in range(6, 13):
-                para_tuples.append((data1, i, multiply, row_size))
+                para_tuples.append((data1, i, multiply, row_size, prefix))
 
             for row_size in range(6, 13):
-                para_tuples.append((data2, i+1, multiply, row_size))
+                para_tuples.append((data2, i+1, multiply, row_size, prefix))
+
+            for row_size in range(6, 13):
+                para_tuples.append((data3, i+2, multiply, row_size, prefix))
+
+            for row_size in range(6, 13):
+                para_tuples.append((data4, i+3, multiply, row_size, prefix))
+
 
             do_work(work_for_preparing, para_tuples, 16)
+
+def main():
+    make_data(global_data_handler, global_key_list, "training_", 0.5, multiply=3)
+
+    make_data(global_validation_data_handler, global_validation_key_list, "validation_", 1.0)
+    
 
 
 if __name__ == "__main__":

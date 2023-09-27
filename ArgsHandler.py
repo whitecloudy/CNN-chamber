@@ -41,12 +41,22 @@ def init_args():
                         help='Row Size')
     parser.add_argument('--patience', type=int, default=3,
                         help='Early stopping patience')
+    parser.add_argument('--dataset-postfix', type=str, default='',
+                        help='Dataset filename postfix')
     parser.add_argument('--model', type=str, default="Net",
                         help='Select Model name')
+    parser.add_argument('--noise-add', type=float, default=0.0,
+                        help='Add noise level to training dataset')
+    parser.add_argument('--val-noise-add', type=float, default=0.0,
+                        help='Add noise level to validation dataset')
     parser.add_argument('--aug-ratio', type=float, default=0.0, metavar='M',
                         help='Augmenation Ratio(default: 0.0)')
     parser.add_argument('--test', type=str, default=None,
                         help='Do the Test')
+    parser.add_argument('--fine-tuning', type=str, default=None,
+                        help='Fine tuning model parameter file')
+    parser.add_argument('--model-freeze', type=int, default=0,
+                        help='Freezing Model')
     parser.add_argument('--worker', type=int, default=8,
                         help='number of worker')
 

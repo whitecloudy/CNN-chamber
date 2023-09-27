@@ -3,8 +3,7 @@ import ArgsHandler
 import torch
 import torch.optim as optim
 import time
-from torch.optim.lr_scheduler import StepLR
-from BeamDataset import DatasetHandler, prepare_dataset, calculate_mmse
+from BeamDataset import calculate_mmse
 from Cosine_sim_loss import complex_cosine_sim_loss as cos_loss
 from Cosine_sim_loss import make_complex
 
@@ -49,12 +48,12 @@ def testing_model(args, model, device):
 
     model.eval()
     print(args.test)
-    x_norm_vector, y_norm_vector = load_cache(args.test+'.norm', testing=True)
+    x_norm_vector, y_norm_vector = load_cache(args.test+'.norm', True)
     x_norm_vector = x_norm_vector.to(device)
     y_norm_vector = y_norm_vector.to(device)
 
     # mmse_para = (C_h, C_w)
-    C_h, C_w = load_cache(args.test + '.mmse', testing=True)
+    C_h, C_w = load_cache(args.test + '.mmse', True)
     C_h = C_h.to(device)
     C_w = C_w.to(device)
 
